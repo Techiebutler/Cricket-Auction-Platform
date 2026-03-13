@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import brandLogo from "@/asset/Logo Png (3).png";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -15,7 +17,9 @@ export default function LandingPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       <div className="text-center max-w-2xl">
-        <div className="text-8xl mb-6 select-none">🏏</div>
+        <div className="mb-6 select-none flex justify-center">
+          <Image src={brandLogo} alt="Cricket Auction" className="h-20 w-auto" priority />
+        </div>
 
         <h1 className="text-5xl font-extrabold mb-4 bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
           Cricket Auction

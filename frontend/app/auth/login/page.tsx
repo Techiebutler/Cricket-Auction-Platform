@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import RolePicker from "@/components/RolePicker";
+import brandLogo from "@/asset/Logo Png (3).png";
 
 type Mode = "password" | "magic";
 
@@ -181,7 +183,9 @@ export default function LoginPage() {
       <div className="card w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-6">
-          <span className="text-4xl">🏏</span>
+          <div className="flex justify-center">
+            <Image src={brandLogo} alt="Cricket Auction" className="h-12 w-auto" priority />
+          </div>
           <h1 className="text-2xl font-bold mt-2">Sign In</h1>
           <p className="text-gray-500 text-sm mt-1">Cricket Auction Platform</p>
         </div>

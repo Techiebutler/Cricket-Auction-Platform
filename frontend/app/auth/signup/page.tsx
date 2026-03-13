@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
+import brandLogo from "@/asset/Logo Png (3).png";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -34,7 +36,9 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="card w-full max-w-md">
         <div className="text-center mb-6">
-          <span className="text-4xl">🏏</span>
+          <div className="flex justify-center">
+            <Image src={brandLogo} alt="Cricket Auction" className="h-12 w-auto" priority />
+          </div>
           <h1 className="text-2xl font-bold mt-2">Join the Auction</h1>
           <p className="text-gray-500 text-sm mt-1">Register as a player to get started</p>
         </div>

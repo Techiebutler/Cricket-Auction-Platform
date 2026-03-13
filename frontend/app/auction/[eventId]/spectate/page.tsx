@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import api from "@/lib/api";
 import { useAuctionStore } from "@/store/auction";
 import { AuctionSocket } from "@/lib/ws";
+import brandLogo from "@/asset/Logo Png (3).png";
 
 interface CompletedSummary {
   highest_bid_player: { player_name: string; sold_price: number; team_name: string } | null;
@@ -248,7 +250,7 @@ export default function SpectatePage() {
           >
             ←
           </button>
-          <span className="text-3xl">🏏</span>
+          <Image src={brandLogo} alt="Cricket Auction" className="h-9 w-auto" />
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-extrabold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
