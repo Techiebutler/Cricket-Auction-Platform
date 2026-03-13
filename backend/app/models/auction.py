@@ -33,7 +33,7 @@ class AuctionEvent(Base):
     organizer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     auctioneer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-    status: Mapped[AuctionStatus] = mapped_column(Enum(AuctionStatus), default=AuctionStatus.draft)
+    status: Mapped[AuctionStatus] = mapped_column(Enum(AuctionStatus, name="auctionstatus", create_type=False), default=AuctionStatus.draft)
     allowed_domains: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     
@@ -90,9 +90,7 @@ class AuctionPlayer(Base):
     base_price: Mapped[int] = mapped_column(Integer, default=100)
     current_bid: Mapped[int] = mapped_column(Integer, default=0)
     current_bidder_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    status: Mapped[PlayerAuctionStatus] = mapped_column(
-        Enum(PlayerAuctionStatus), default=PlayerAuctionStatus.pending
-    )
+    status: Mapped[PlayerAuctionStatus] = mapped_column(Enum(PlayerAuctionStatus, name="playerauctionstatus", create_type=False), default=PlayerAuctionStatus.pending)
     auction_order: Mapped[int] = mapped_column(Integer, default=0)
 
     event: Mapped["AuctionEvent"] = relationship("AuctionEvent", back_populates="auction_players")
