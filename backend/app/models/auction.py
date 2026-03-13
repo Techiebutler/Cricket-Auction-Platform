@@ -46,6 +46,9 @@ class AuctionEvent(Base):
     
     # Final viewer count (persisted when event completes)
     total_viewers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    
+    # Event logo URL
+    logo: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

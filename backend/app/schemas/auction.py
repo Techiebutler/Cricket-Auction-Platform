@@ -38,6 +38,7 @@ class AuctionEventOut(BaseModel):
     team_budget: int
     team_max_players: int
     player_base_price: int
+    logo: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

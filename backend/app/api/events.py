@@ -34,6 +34,7 @@ class EventCardOut(BaseModel):
     created_at: datetime
     my_roles: list[str] = []  # all roles this user has in this event
     viewer_count: Optional[int] = None  # live viewers or total unique viewers for completed
+    logo: Optional[str] = None  # event logo URL
 
 
 def _can_see_draft(event: AuctionEvent, user: User) -> bool:
@@ -186,4 +187,5 @@ async def _to_card(event: AuctionEvent, user: User, db: AsyncSession) -> EventCa
         created_at=event.created_at,
         my_roles=my_roles,
         viewer_count=viewer_count,
+        logo=event.logo,
     )

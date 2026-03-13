@@ -42,6 +42,7 @@ interface EventDetail {
   team_budget: number;
   team_max_players: number;
   player_base_price: number;
+  logo: string | null;
 }
 
 interface Readiness {
@@ -642,6 +643,7 @@ export default function OrganizerEventDetailPage() {
   const [markingReady, setMarkingReady] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const showToast = (type: "ok" | "err", text: string) => {
     setToast({ type, text });
@@ -792,6 +794,35 @@ export default function OrganizerEventDetailPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       showToast("err", msg || "Failed to unpublish");
+    }
+  };
+
+  const uploadLogo = async (file: File) => {
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(`/organizer/events/${eid}/logo`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setEvent(data);
+      showToast("ok", "Logo uploaded successfully");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast("err", msg || "Failed to upload logo");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const deleteLogo = async () => {
+    try {
+      const { data } = await api.delete(`/organizer/events/${eid}/logo`);
+      setEvent(data);
+      showToast("ok", "Logo removed");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast("err", msg || "Failed to remove logo");
     }
   };
 
@@ -1006,6 +1037,69 @@ export default function OrganizerEventDetailPage() {
                   </h3>
 
                   <div className="space-y-6">
+                    {/* Event Logo */}
+                    <div>
+                      <label className="label text-gray-300 mb-1 block">Event Logo</label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Upload a logo for your event. It will be displayed on event cards.
+                      </p>
+                      <div className="flex items-center gap-4">
+                        {event?.logo ? (
+                          <div className="relative group">
+                            <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+                              <img src={event.logo} alt="Event logo" className="w-full h-full object-cover" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={deleteLogo}
+                              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Remove logo"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-700 hover:border-amber-500/50 hover:bg-amber-500/5 cursor-pointer flex flex-col items-center justify-center text-gray-500 hover:text-amber-400 transition-all">
+                            {uploadingLogo ? (
+                              <span className="text-xs">Uploading...</span>
+                            ) : (
+                              <>
+                                <span className="text-2xl mb-1">📷</span>
+                                <span className="text-[10px]">Add Logo</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingLogo}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) uploadLogo(file);
+                              }}
+                            />
+                          </label>
+                        )}
+                        {event?.logo && (
+                          <label className="btn-secondary text-xs cursor-pointer">
+                            {uploadingLogo ? "Uploading..." : "Change Logo"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={uploadingLogo}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) uploadLogo(file);
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-gray-800 w-full"></div>
+
                     {/* Schedule */}
                     <div>
                       <label className="label text-gray-300 mb-1 block">Auction Schedule</label>

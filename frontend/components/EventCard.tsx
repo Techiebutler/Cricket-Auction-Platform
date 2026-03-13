@@ -15,6 +15,7 @@ interface EventCard {
   created_at: string;
   my_roles?: string[];
   viewer_count?: number;
+  logo?: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
@@ -101,13 +102,21 @@ export default function EventCard({ event }: { event: EventCard }) {
       >
         {/* Header row */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg leading-snug truncate group-hover:text-amber-400 transition-colors">
-              {event.name}
-            </h3>
-            <p className="text-gray-500 text-sm mt-0.5 line-clamp-1 h-5 overflow-hidden">
-              {event.description || "\u00A0"}
-            </p>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Event Logo */}
+            {event.logo && (
+              <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800 shrink-0">
+                <img src={event.logo} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-lg leading-snug truncate group-hover:text-amber-400 transition-colors">
+                {event.name}
+              </h3>
+              <p className="text-gray-500 text-sm mt-0.5 line-clamp-1 h-5 overflow-hidden">
+                {event.description || "\u00A0"}
+              </p>
+            </div>
           </div>
           <div className={`flex items-center gap-1.5 shrink-0 ${statusCfg.color}`}>
             <span

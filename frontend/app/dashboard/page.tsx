@@ -21,6 +21,7 @@ interface EventCardData {
   my_roles: string[];
   scheduled_at?: string | null;
   viewer_count?: number;
+  logo?: string | null;
 }
 
 export default function DashboardPage() {

@@ -2,7 +2,7 @@ import secrets
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
@@ -22,6 +22,7 @@ from app.schemas.auction import (
 )
 from app.schemas.user import UserOut
 from app.services import email_service
+from app.services.s3_service import upload_file
 from app.core.queue import enqueue
 
 INVITE_TTL_SECONDS = 60 * 60 * 24 * 7
@@ -470,6 +471,50 @@ async def update_settings(
         for p in players:
             p.base_price = payload.player_base_price
 
+    await db.commit()
+    await db.refresh(event)
+    return AuctionEventOut.model_validate(event)
+
+
+@router.post("/events/{event_id}/logo", response_model=AuctionEventOut)
+async def upload_event_logo(
+    event_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role(ROLE_ORGANIZER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a logo for the event."""
+    event = await _get_event_for_organizer(event_id, current_user, db)
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Read file content
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+    
+    # Upload to S3
+    url = upload_file(content, key_prefix=f"event-logos/{event_id}", content_type=file.content_type)
+    if not url:
+        raise HTTPException(status_code=500, detail="Failed to upload logo. S3 may not be configured.")
+    
+    event.logo = url
+    await db.commit()
+    await db.refresh(event)
+    return AuctionEventOut.model_validate(event)
+
+
+@router.delete("/events/{event_id}/logo", response_model=AuctionEventOut)
+async def delete_event_logo(
+    event_id: int,
+    current_user: User = Depends(require_role(ROLE_ORGANIZER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove the event logo."""
+    event = await _get_event_for_organizer(event_id, current_user, db)
+    event.logo = None
     await db.commit()
     await db.refresh(event)
     return AuctionEventOut.model_validate(event)
