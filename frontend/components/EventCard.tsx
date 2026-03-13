@@ -18,13 +18,41 @@ interface EventCard {
   logo?: string | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  draft: { label: "Draft", color: "text-gray-400", dot: "bg-gray-500" },
-  ready: { label: "Ready", color: "text-blue-400", dot: "bg-blue-500" },
-  active: { label: "Live", color: "text-green-400", dot: "bg-green-400" },
-  paused: { label: "Paused", color: "text-amber-400", dot: "bg-amber-400" },
-  completed: { label: "Completed", color: "text-gray-500", dot: "bg-gray-600" },
+const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string; bg: string }> = {
+  draft: { label: "Draft", color: "text-gray-400", dot: "bg-gray-500", bg: "from-gray-700 to-gray-800" },
+  ready: { label: "Ready", color: "text-blue-400", dot: "bg-blue-500", bg: "from-blue-900/50 to-indigo-900/50" },
+  active: { label: "Live", color: "text-green-400", dot: "bg-green-400", bg: "from-green-900/50 to-emerald-900/50" },
+  paused: { label: "Paused", color: "text-amber-400", dot: "bg-amber-400", bg: "from-amber-900/50 to-orange-900/50" },
+  completed: { label: "Completed", color: "text-gray-500", dot: "bg-gray-600", bg: "from-gray-800 to-gray-900" },
 };
+
+// Generate initials from event name (first letter of first 2 words)
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+// Generate a consistent color based on event name
+function getInitialsBgColor(name: string): string {
+  const colors = [
+    "from-purple-600 to-indigo-700",
+    "from-blue-600 to-cyan-700",
+    "from-emerald-600 to-teal-700",
+    "from-amber-600 to-orange-700",
+    "from-rose-600 to-pink-700",
+    "from-violet-600 to-purple-700",
+    "from-cyan-600 to-blue-700",
+    "from-green-600 to-emerald-700",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
 
 const ROLE_BADGE: Record<string, string> = {
   admin: "bg-purple-500/20 text-purple-300",
@@ -80,107 +108,120 @@ export default function EventCard({ event }: { event: EventCard }) {
     ? getRoleAction(primaryRole, event.id, event.status)
     : { label: "Spectate", href: `/auction/${event.id}/spectate` };
 
-  return (
-    <div className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-amber-500/40 transition-all hover:shadow-lg hover:shadow-amber-500/5">
-      {/* Top color bar */}
-      <div
-        className={`h-1 w-full ${
-          event.status === "active"
-            ? "bg-gradient-to-r from-green-500 to-emerald-400"
-            : event.status === "ready"
-            ? "bg-gradient-to-r from-blue-500 to-indigo-400"
-            : event.status === "completed"
-            ? "bg-gray-700"
-            : "bg-gradient-to-r from-amber-500 to-orange-400"
-        }`}
-      />
+  const initials = getInitials(event.name);
+  const initialsBg = getInitialsBgColor(event.name);
 
-      {/* Clickable body — navigates to primary action */}
+  return (
+    <div className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-amber-500/40 transition-all hover:shadow-lg hover:shadow-amber-500/5 flex flex-col">
+      {/* Hero section with logo/initials */}
       <div
-        className="p-5 cursor-pointer"
+        className={`relative h-28 bg-gradient-to-br ${statusCfg.bg} cursor-pointer`}
         onClick={() => router.push(primaryAction.href)}
       >
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Event Logo */}
-            {event.logo && (
-              <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800 shrink-0">
-                <img src={event.logo} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-lg leading-snug truncate group-hover:text-amber-400 transition-colors">
-                {event.name}
-              </h3>
-              <p className="text-gray-500 text-sm mt-0.5 line-clamp-1 h-5 overflow-hidden">
-                {event.description || "\u00A0"}
-              </p>
+        {/* Logo or Initials */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          {event.logo ? (
+            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-black/20 shadow-lg border border-white/10">
+              <img src={event.logo} alt="" className="w-full h-full object-cover" />
             </div>
-          </div>
-          <div className={`flex items-center gap-1.5 shrink-0 ${statusCfg.color}`}>
-            <span
-              className={`w-2 h-2 rounded-full ${statusCfg.dot} ${
-                event.status === "active" ? "animate-pulse" : ""
-              }`}
-            />
-            <span className="text-xs font-medium">{statusCfg.label}</span>
-          </div>
+          ) : (
+            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${initialsBg} flex items-center justify-center shadow-lg border border-white/10`}>
+              <span className="text-3xl font-bold text-white/90 tracking-tight">{initials}</span>
+            </div>
+          )}
         </div>
+
+        {/* Status badge - top right */}
+        <div className={`absolute top-3 right-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 backdrop-blur-sm ${statusCfg.color}`}>
+          <span
+            className={`w-2 h-2 rounded-full ${statusCfg.dot} ${
+              event.status === "active" ? "animate-pulse" : ""
+            }`}
+          />
+          <span className="text-xs font-medium">{statusCfg.label}</span>
+        </div>
+
+        {/* Live viewer count badge - top left for active events */}
+        {event.status === "active" && (
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/90 text-white text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            {event.viewer_count ?? 0} watching
+          </div>
+        )}
+      </div>
+
+      {/* Content section */}
+      <div
+        className="p-4 flex-1 flex flex-col cursor-pointer"
+        onClick={() => router.push(primaryAction.href)}
+      >
+        {/* Event name */}
+        <h3 className="font-bold text-base leading-snug text-center truncate group-hover:text-amber-400 transition-colors mb-1">
+          {event.name}
+        </h3>
+
+        {/* Description */}
+        <p className="text-gray-500 text-xs text-center line-clamp-1 mb-3">
+          {event.description || "\u00A0"}
+        </p>
 
         {/* Scheduled date */}
         {event.scheduled_at && (
-          <div className="flex items-center gap-1.5 text-xs text-amber-400/90 mb-3">
+          <div className="flex items-center justify-center gap-1.5 text-xs text-amber-400/90 mb-3">
             <span>📅</span>
             <span>
               {new Date(event.scheduled_at).toLocaleString("en-IN", {
                 weekday: "short", day: "numeric", month: "short",
-                year: "numeric", hour: "2-digit", minute: "2-digit",
+                hour: "2-digit", minute: "2-digit",
               })}
             </span>
           </div>
         )}
 
-        {/* Stats */}
-        <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+        {/* Stats row */}
+        <div className="flex items-center justify-center gap-3 text-xs text-gray-500 mb-3">
           <span className="flex items-center gap-1">
             <span>🏟️</span>
-            <span>{event.team_count} teams</span>
+            <span>{event.team_count}</span>
           </span>
           <span className="flex items-center gap-1">
             <span>👥</span>
-            <span>{event.player_count} players</span>
+            <span>{event.player_count}</span>
           </span>
-          {(event.status === "active" || event.status === "completed") && (
+          {event.status === "completed" && (
             <span className="flex items-center gap-1 text-blue-400">
               <span>👁</span>
-              <span>{event.viewer_count ?? 0} {event.status === "completed" ? "watched" : "watching"}</span>
+              <span>{event.viewer_count ?? 0}</span>
             </span>
           )}
         </div>
 
-        {/* Footer: role badges + primary CTA */}
-        <div className="flex items-center justify-between">
-          {/* Role pills */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {myRoles.length === 0 && (
-              <span className="text-xs text-gray-600">Spectator</span>
-            )}
-            {sortedRoles.map((role) => (
-              <span
-                key={role}
-                className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
-                  ROLE_BADGE[role] ?? "bg-gray-700 text-gray-400"
-                }`}
-              >
-                {role}
-              </span>
-            ))}
-          </div>
+        {/* Role pills */}
+        <div className="flex items-center justify-center gap-1 flex-wrap mb-3">
+          {myRoles.length === 0 && (
+            <span className="text-xs text-gray-600">Spectator</span>
+          )}
+          {sortedRoles.map((role) => (
+            <span
+              key={role}
+              className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
+                ROLE_BADGE[role] ?? "bg-gray-700 text-gray-400"
+              }`}
+            >
+              {role}
+            </span>
+          ))}
+        </div>
 
-          <span className="text-xs font-medium text-amber-400 group-hover:translate-x-1 transition-transform shrink-0 ml-2">
-            {primaryAction.label} →
-          </span>
+        {/* Primary CTA */}
+        <div className="mt-auto pt-2 border-t border-gray-800">
+          <button
+            className="w-full text-xs font-medium text-amber-400 hover:text-amber-300 py-2 flex items-center justify-center gap-1 group-hover:gap-2 transition-all"
+            onClick={(e) => { e.stopPropagation(); router.push(primaryAction.href); }}
+          >
+            {primaryAction.label}
+            <span className="transition-transform group-hover:translate-x-0.5">→</span>
+          </button>
         </div>
       </div>
 
@@ -191,10 +232,10 @@ export default function EventCard({ event }: { event: EventCard }) {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-5 py-2 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors flex items-center justify-between"
+            className="w-full px-4 py-2 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
             onClick={() => setMenuOpen((v) => !v)}
           >
-            <span>Open as different role</span>
+            <span>Switch role</span>
             <span className={`transition-transform ${menuOpen ? "rotate-180" : ""}`}>▾</span>
           </button>
 

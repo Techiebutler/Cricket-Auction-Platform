@@ -184,10 +184,10 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex justify-center">
-            <Image src={brandLogo} alt="Cricket Auction" className="h-12 w-auto" priority />
+            <Image src={brandLogo} alt="Auction" className="h-14 w-auto" priority />
           </div>
           <h1 className="text-2xl font-bold mt-2">Sign In</h1>
-          <p className="text-gray-500 text-sm mt-1">Cricket Auction Platform</p>
+          <p className="text-gray-500 text-sm mt-1">Live Auction Platform</p>
         </div>
 
         {/* Mode switcher */}

@@ -18,11 +18,11 @@ export default function LandingPage() {
     <main className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       <div className="text-center max-w-2xl">
         <div className="mb-6 select-none flex justify-center">
-          <Image src={brandLogo} alt="Cricket Auction" className="h-20 w-auto" priority />
+          <Image src={brandLogo} alt="Auction" className="h-24 w-auto" priority />
         </div>
 
         <h1 className="text-5xl font-extrabold mb-4 bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-          Cricket Auction
+          Live Auction Platform
         </h1>
         <p className="text-xl text-gray-400 mb-10">
           Experience the thrill of an IPL-style player auction — live bidding,

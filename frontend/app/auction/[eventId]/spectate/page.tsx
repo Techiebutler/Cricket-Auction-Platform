@@ -49,7 +49,7 @@ export default function SpectatePage() {
   const [historySort, setHistorySort] = useState<"price-desc" | "price-asc" | "name">("price-desc");
   const [teamFilter, setTeamFilter] = useState<string>("all");
 
-  const [eventMeta, setEventMeta] = useState<{ name: string; description: string | null; scheduled_at: string | null } | null>(null);
+  const [eventMeta, setEventMeta] = useState<{ name: string; description: string | null; scheduled_at: string | null; logo: string | null } | null>(null);
   const [lastShownAuctionPlayerId, setLastShownAuctionPlayerId] = useState<number | null>(null);
   const [completedSummary, setCompletedSummary] = useState<CompletedSummary | null>(null);
   const [viewerCount, setViewerCount] = useState<number>(0);
@@ -78,6 +78,7 @@ export default function SpectatePage() {
         name: eventRes.data.name,
         description: eventRes.data.description ?? null,
         scheduled_at: eventRes.data.scheduled_at ?? null,
+        logo: eventRes.data.logo ?? null,
       });
     }
     if (teamRes.data) {
@@ -269,21 +270,26 @@ export default function SpectatePage() {
           >
             ←
           </button>
-          <Image src={brandLogo} alt="Cricket Auction" className="h-9 w-auto" />
+          <Image src={brandLogo} alt="Auction" className="h-12 w-auto" />
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-extrabold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-                Cricket Auction LIVE
+              <h1 className="text-xl font-bold text-white">
+                {eventMeta?.name || "Auction"}
               </h1>
+              {store.status === "active" && (
+                <span className="bg-red-500/90 text-white text-xs font-semibold px-2 py-1 rounded animate-pulse">
+                  LIVE
+                </span>
+              )}
               {store.status === "completed" && (
                 <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-1 rounded">
                   COMPLETED
                 </span>
               )}
             </div>
-            {eventMeta && (
+            {eventMeta && eventMeta.description && (
               <p className="text-xs text-gray-500">
-                {eventMeta.name}
+                {eventMeta.description}
                 {eventMeta.scheduled_at && store.status !== "completed" && (
                   <>
                     {" · "}
@@ -350,7 +356,7 @@ export default function SpectatePage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main stage */}
-        <div className="flex-1 flex flex-col items-center justify-center p-10 overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center p-10 overflow-y-auto">
           {displayAP ? (
             <div className="text-center max-w-2xl w-full">
               {/* Timer */}
@@ -444,11 +450,17 @@ export default function SpectatePage() {
               )}
             </div>
           ) : (
-            <div className="text-center max-w-lg w-full mx-auto text-center">
+            <div className="text-center max-w-lg w-full mx-auto text-center pt-6">
               {store.status === "completed" ? (
                 <div className="w-full max-w-4xl text-left">
-                  <div className="text-center mb-6">
-                    <div className="text-7xl mb-4">🏆</div>
+                  <div className="text-center mb-6 pt-4">
+                    {eventMeta?.logo ? (
+                      <div className="w-24 h-24 mx-auto mb-4 rounded-2xl overflow-hidden bg-gray-800 border border-gray-700 shadow-lg">
+                        <img src={eventMeta.logo} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="text-7xl mb-4">🏆</div>
+                    )}
                     <h2 className="text-4xl font-bold text-white">Auction Completed</h2>
                     <p className="text-gray-400 mt-2">Final event summary</p>
                   </div>

@@ -3,8 +3,8 @@ import "./globals.css";
 import faviconPng from "@/asset/Favi PNG.png";
 
 export const metadata: Metadata = {
-  title: "Cricket Auction",
-  description: "Platform for tbpl auction, coz we're fcking devs",
+  title: "Auction",
+  description: "Live auction platform for team building events",
   icons: {
     icon: [{ url: faviconPng.src, type: "image/png" }],
     shortcut: [{ url: faviconPng.src, type: "image/png" }],

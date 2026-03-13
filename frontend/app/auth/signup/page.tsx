@@ -62,7 +62,7 @@ export default function SignupPage() {
       <div className="card w-full max-w-md">
         <div className="text-center mb-6">
           <div className="flex justify-center">
-            <Image src={brandLogo} alt="Cricket Auction" className="h-12 w-auto" priority />
+            <Image src={brandLogo} alt="Auction" className="h-14 w-auto" priority />
           </div>
           <h1 className="text-2xl font-bold mt-2">Join the Auction</h1>
           <p className="text-gray-500 text-sm mt-1">Register as a player to get started</p>

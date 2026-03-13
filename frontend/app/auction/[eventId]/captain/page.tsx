@@ -21,6 +21,7 @@ interface EventMeta {
   name: string;
   scheduled_at: string | null;
   status: string;
+  logo: string | null;
 }
 
 interface CompletedSummary {
@@ -145,6 +146,7 @@ export default function CaptainPage() {
         name: eventRes.data.name,
         scheduled_at: eventRes.data.scheduled_at ?? null,
         status: eventRes.data.status,
+        logo: eventRes.data.logo ?? null,
       });
     }
     if (teamsRes.data) {
@@ -476,7 +478,13 @@ export default function CaptainPage() {
               {store.status === "completed" ? (
                 <div className="w-full max-w-3xl text-left">
                   <div className="text-center mb-6">
-                    <div className="text-7xl mb-4">🏆</div>
+                    {eventMeta?.logo ? (
+                      <div className="w-24 h-24 mx-auto mb-4 rounded-2xl overflow-hidden bg-gray-800 border border-gray-700 shadow-lg">
+                        <img src={eventMeta.logo} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="text-7xl mb-4">🏆</div>
+                    )}
                     <h2 className="text-4xl font-bold text-white">Auction Completed</h2>
                     <p className="text-gray-400 mt-2">Final summary for captains</p>
                   </div>
