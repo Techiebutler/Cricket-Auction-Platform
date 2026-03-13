@@ -85,8 +85,8 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost/api
-      NEXT_PUBLIC_WS_URL: ws://localhost/api/auction/ws
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost/api/auction/ws}
     depends_on:
       - backend
     ports:

@@ -7,7 +7,7 @@ An IPL-style cricket player auction platform with real-time bidding via WebSocke
 - **Backend**: FastAPI + SQLAlchemy (async) + PostgreSQL + Redis (Caching & WebSockets) + ARQ (Background Tasks)
 - **Frontend**: Next.js 14 (App Router) + TailwindCSS + Zustand
 - **Storage & Email**: AWS S3 (Profile Photos) + AWS SES (Invitations)
-- **Infra**: Docker Compose + Nginx
+- **Infra**: Docker Compose + Traefik (TLS/Let's Encrypt)
 
 ## Getting Started (Development)
 
@@ -40,22 +40,30 @@ The API docs are available at [http://localhost/api/docs](http://localhost/api/d
 
 ## Production Deployment
 
-For production, use the optimized Dockerfiles and Compose file (`docker-compose.prod.yml`). This uses Next.js standalone builds, multi-worker Uvicorn configurations, and strips out hot-reloading overhead.
+For production, use the optimized Dockerfiles and Compose file (`docker-compose.prod.yml`). This uses Next.js standalone builds, multi-worker Uvicorn configurations, Traefik as reverse proxy, and automatic Let's Encrypt certificates.
 
-1. Ensure your `.env` is configured for production. **Crucially**, set the WebSockets URL to match your domain:
+1. Create production env file:
 ```bash
-# In .env
-NEXT_PUBLIC_WS_URL=wss://yourdomain.com/api/auction/ws
+cp .env.prod .env.prod.local
 ```
 
-2. Build and start the production containers in detached mode:
+2. Fill `.env.prod.local` values:
 ```bash
-docker compose -f docker-compose.prod.yml up --build -d
+PUBLIC_DOMAIN=auction.techiebutler.com
+TRAEFIK_ACME_EMAIL=ops@yourdomain.com
+SECRET_KEY=<long-random-secret>
+GODMODE_SECRET=<different-long-random-secret>
+POSTGRES_PASSWORD=<strong-db-password>
 ```
 
-3. Run the database migrations against the production database:
+3. Build and start the production containers in detached mode:
 ```bash
-docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+docker compose --env-file .env.prod.local -f docker-compose.prod.yml up --build -d
+```
+
+4. Run the database migrations against the production database:
+```bash
+docker compose --env-file .env.prod.local -f docker-compose.prod.yml exec backend alembic upgrade head
 ```
 
 ### God Mode (Testing)
