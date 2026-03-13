@@ -55,10 +55,11 @@ export default function SpectatePage() {
   const [viewerCount, setViewerCount] = useState<number>(0);
 
   const syncState = useCallback(async () => {
-    const [stateRes, eventRes, teamRes] = await Promise.all([
+    const [stateRes, eventRes, teamRes, viewerStatsRes] = await Promise.all([
       api.get(`/auction/events/${eid}/state`),
       api.get(`/auction/events/${eid}`).catch(() => ({ data: null })),
       api.get(`/auction/events/${eid}/teams`).catch(() => ({ data: [] })),
+      api.get(`/auction/events/${eid}/viewer-stats`).catch(() => ({ data: null })),
     ]);
     const data = stateRes.data;
     store.setFullState({
@@ -87,6 +88,13 @@ export default function SpectatePage() {
         }
       );
       setTeamRosters(map);
+    }
+    // Set initial viewer count from API (especially important for completed events)
+    if (viewerStatsRes.data) {
+      const count = data.status === "completed" 
+        ? viewerStatsRes.data.total_unique_viewers 
+        : viewerStatsRes.data.live_viewers;
+      setViewerCount(count || 0);
     }
   }, [eid]);
 

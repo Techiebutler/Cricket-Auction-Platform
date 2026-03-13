@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections import defaultdict
 from typing import Any
 
@@ -14,20 +15,33 @@ class ConnectionManager:
         self._rooms: dict[int, list[WebSocket]] = defaultdict(list)
         # event_id -> dict of ws -> user_id (for tracking who is connected)
         self._user_map: dict[int, dict[WebSocket, int | None]] = defaultdict(dict)
+        # ws -> session_id (for tracking Redis session per connection)
+        self._ws_sessions: dict[WebSocket, str] = {}
         self._pubsub = None
         self._task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task | None = None
+        # Debounce tracking for viewer count broadcasts
+        self._pending_broadcasts: dict[int, asyncio.Task | None] = {}
+        self._last_broadcast_time: dict[int, float] = {}
 
     async def startup(self):
         redis = await get_redis()
         self._pubsub = redis.pubsub()
         await self._pubsub.subscribe("auction_events_channel")
         self._task = asyncio.create_task(self._listen())
+        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
 
     async def shutdown(self):
         if self._task:
             self._task.cancel()
             try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
             except asyncio.CancelledError:
                 pass
         if self._pubsub:
@@ -54,7 +68,7 @@ class ConnectionManager:
         self._user_map[event_id][ws] = user_id
         
         # Track viewer in Redis
-        await self._track_viewer_connect(event_id, user_id)
+        await self._track_viewer_connect(event_id, ws, user_id)
 
     async def disconnect(self, event_id: int, ws: WebSocket):
         user_id = self._user_map[event_id].pop(ws, None)
@@ -68,15 +82,20 @@ class ConnectionManager:
                 del self._user_map[event_id]
         
         # Update viewer count in Redis
-        await self._track_viewer_disconnect(event_id, user_id)
+        await self._track_viewer_disconnect(event_id, ws)
 
-    async def _track_viewer_connect(self, event_id: int, user_id: int | None):
+    async def _track_viewer_connect(self, event_id: int, ws: WebSocket, user_id: int | None):
         """Track viewer connection in Redis and broadcast updated count."""
         redis = await get_redis()
         
-        # Increment live viewer count
-        live_key = f"event:{event_id}:live_viewers"
-        await redis.incr(live_key)
+        # Use a set to track connected sessions (more reliable than counter)
+        # Each WebSocket connection gets a unique session ID
+        session_key = f"event:{event_id}:live_sessions"
+        session_id = f"{id(ws)}:{time.time()}"
+        await redis.sadd(session_key, session_id)
+        
+        # Store session_id for this WebSocket to remove on disconnect
+        self._ws_sessions[ws] = session_id
         
         # Add to unique viewers set (only if user is authenticated)
         if user_id:
@@ -86,27 +105,61 @@ class ConnectionManager:
         # Broadcast updated viewer count
         await self._broadcast_viewer_count(event_id)
 
-    async def _track_viewer_disconnect(self, event_id: int, user_id: int | None):
+    async def _track_viewer_disconnect(self, event_id: int, ws: WebSocket):
         """Track viewer disconnection and broadcast updated count."""
         redis = await get_redis()
         
-        # Decrement live viewer count
-        live_key = f"event:{event_id}:live_viewers"
-        count = await redis.decr(live_key)
-        
-        # Ensure count doesn't go negative
-        if count < 0:
-            await redis.set(live_key, 0)
+        # Remove session from live sessions set
+        session_key = f"event:{event_id}:live_sessions"
+        session_id = self._ws_sessions.pop(ws, None)
+        if session_id:
+            await redis.srem(session_key, session_id)
         
         # Broadcast updated viewer count
         await self._broadcast_viewer_count(event_id)
 
     async def _broadcast_viewer_count(self, event_id: int):
-        """Broadcast current viewer count to all connected clients."""
+        """
+        Broadcast current viewer count to all connected clients.
+        Debounced to max 1 broadcast per 5 seconds per event.
+        """
+        DEBOUNCE_SECONDS = 5
+        
+        current_time = time.time()
+        last_broadcast = self._last_broadcast_time.get(event_id, 0)
+        
+        # If we broadcasted recently, schedule a delayed broadcast instead
+        if current_time - last_broadcast < DEBOUNCE_SECONDS:
+            # Cancel any existing pending broadcast for this event
+            existing_task = self._pending_broadcasts.get(event_id)
+            if existing_task and not existing_task.done():
+                existing_task.cancel()
+            
+            # Schedule a new broadcast after the remaining debounce time
+            delay = DEBOUNCE_SECONDS - (current_time - last_broadcast)
+            self._pending_broadcasts[event_id] = asyncio.create_task(
+                self._delayed_broadcast(event_id, delay)
+            )
+            return
+        
+        # Broadcast immediately
+        await self._do_broadcast_viewer_count(event_id)
+    
+    async def _delayed_broadcast(self, event_id: int, delay: float):
+        """Helper to broadcast after a delay."""
+        try:
+            await asyncio.sleep(delay)
+            await self._do_broadcast_viewer_count(event_id)
+        except asyncio.CancelledError:
+            pass
+    
+    async def _do_broadcast_viewer_count(self, event_id: int):
+        """Actually perform the viewer count broadcast."""
         redis = await get_redis()
-        live_key = f"event:{event_id}:live_viewers"
-        count = await redis.get(live_key)
-        viewer_count = int(count) if count else 0
+        session_key = f"event:{event_id}:live_sessions"
+        viewer_count = await redis.scard(session_key) or 0
+        
+        self._last_broadcast_time[event_id] = time.time()
         
         await self.broadcast(event_id, {
             "type": "viewer_count",
@@ -118,14 +171,14 @@ class ConnectionManager:
         """Get live and total unique viewer counts for an event."""
         redis = await get_redis()
         
-        live_key = f"event:{event_id}:live_viewers"
+        session_key = f"event:{event_id}:live_sessions"
         unique_key = f"event:{event_id}:unique_viewers"
         
-        live_count = await redis.get(live_key)
+        live_count = await redis.scard(session_key)
         unique_count = await redis.scard(unique_key)
         
         return {
-            "live_viewers": int(live_count) if live_count else 0,
+            "live_viewers": live_count or 0,
             "total_unique_viewers": unique_count or 0,
         }
 
@@ -155,6 +208,66 @@ class ConnectionManager:
 
     async def send_personal(self, ws: WebSocket, message: dict[str, Any]):
         await ws.send_text(json.dumps(message))
+
+    async def _periodic_cleanup(self):
+        """
+        Periodically clean up stale session data from Redis.
+        Only cleans up events that have NO active WebSocket connections on this worker.
+        Runs every 5 minutes.
+        """
+        CLEANUP_INTERVAL = 300  # 5 minutes
+        SESSION_TTL = 600  # Sessions older than 10 minutes are considered stale
+        
+        while True:
+            try:
+                await asyncio.sleep(CLEANUP_INTERVAL)
+                
+                redis = await get_redis()
+                
+                # Get all live_sessions keys
+                keys = await redis.keys("event:*:live_sessions")
+                
+                for key in keys:
+                    # Extract event_id from key
+                    try:
+                        event_id = int(key.decode().split(":")[1])
+                    except (ValueError, IndexError):
+                        continue
+                    
+                    # Skip events with active connections on this worker
+                    if event_id in self._rooms and len(self._rooms[event_id]) > 0:
+                        continue
+                    
+                    # Get all sessions for this event
+                    sessions = await redis.smembers(key)
+                    current_time = time.time()
+                    stale_sessions = []
+                    
+                    for session in sessions:
+                        try:
+                            # Session format: "{ws_id}:{timestamp}"
+                            session_str = session.decode() if isinstance(session, bytes) else session
+                            parts = session_str.rsplit(":", 1)
+                            if len(parts) == 2:
+                                session_time = float(parts[1])
+                                # If session is older than TTL, mark as stale
+                                if current_time - session_time > SESSION_TTL:
+                                    stale_sessions.append(session)
+                        except (ValueError, IndexError):
+                            # Invalid session format, mark for removal
+                            stale_sessions.append(session)
+                    
+                    # Remove stale sessions
+                    if stale_sessions:
+                        await redis.srem(key, *stale_sessions)
+                        print(f"Cleaned up {len(stale_sessions)} stale sessions for event {event_id}")
+                        
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+                # Continue running even if there's an error
+                await asyncio.sleep(60)
 
 
 manager = ConnectionManager()

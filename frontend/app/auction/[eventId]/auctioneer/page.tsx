@@ -24,9 +24,10 @@ export default function AuctioneerPage() {
   const [viewerCount, setViewerCount] = useState<number>(0);
 
   const syncState = useCallback(async () => {
-    const [{ data }, teamRes] = await Promise.all([
+    const [{ data }, teamRes, viewerStatsRes] = await Promise.all([
       api.get(`/auction/events/${eid}/state`),
       api.get(`/auction/events/${eid}/teams`).catch(() => ({ data: [] })),
+      api.get(`/auction/events/${eid}/viewer-stats`).catch(() => ({ data: null })),
     ]);
     store.setFullState({
       eventId: eid,
@@ -44,6 +45,13 @@ export default function AuctioneerPage() {
         map[t.id] = t.players || [];
       });
       setTeamRosters(map);
+    }
+    // Set initial viewer count from API (especially important for completed events)
+    if (viewerStatsRes.data) {
+      const count = data.status === "completed" 
+        ? viewerStatsRes.data.total_unique_viewers 
+        : viewerStatsRes.data.live_viewers;
+      setViewerCount(count || 0);
     }
   }, [eid]);
 
@@ -218,7 +226,7 @@ export default function AuctioneerPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">Auctioneer Panel</h1>
               <div className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 text-xs font-semibold px-2.5 py-1 rounded">
-                <span>👁</span> {viewerCount} watching
+                <span>👁</span> {viewerCount} {status === "completed" ? "watched" : "watching"}
               </div>
               {status === "completed" && (
                 <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-1 rounded">

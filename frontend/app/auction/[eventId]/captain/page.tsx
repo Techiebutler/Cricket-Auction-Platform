@@ -124,11 +124,12 @@ export default function CaptainPage() {
   }, [eid, router]);
 
   const syncState = useCallback(async () => {
-    const [stateRes, teamRes, eventRes, teamsRes] = await Promise.all([
+    const [stateRes, teamRes, eventRes, teamsRes, viewerStatsRes] = await Promise.all([
       api.get(`/auction/events/${eid}/state`),
       api.get(`/auction/events/${eid}/my-team`).catch(() => ({ data: null })),
       api.get(`/auction/events/${eid}`).catch(() => ({ data: null })),
       api.get(`/auction/events/${eid}/teams`).catch(() => ({ data: [] })),
+      api.get(`/auction/events/${eid}/viewer-stats`).catch(() => ({ data: null })),
     ]);
     store.setFullState({
       eventId: eid,
@@ -152,6 +153,13 @@ export default function CaptainPage() {
         map[t.id] = t.players || [];
       });
       setTeamRosters(map);
+    }
+    // Set initial viewer count from API (especially important for completed events)
+    if (viewerStatsRes.data) {
+      const count = stateRes.data.status === "completed" 
+        ? viewerStatsRes.data.total_unique_viewers 
+        : viewerStatsRes.data.live_viewers;
+      setViewerCount(count || 0);
     }
   }, [eid]);
 
@@ -349,7 +357,7 @@ export default function CaptainPage() {
           <div className="flex gap-6 text-center">
             <div>
               <p className="text-xl font-bold text-blue-400">{viewerCount}</p>
-              <p className="text-xs text-gray-500">Watching</p>
+              <p className="text-xs text-gray-500">{store.status === "completed" ? "Watched" : "Watching"}</p>
             </div>
             <div>
               <p className="text-xl font-bold text-amber-400">{remaining}</p>

@@ -328,6 +328,11 @@ async def finish_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     event.status = AuctionStatus.completed
     await db.commit()
     await db.refresh(event)
+    
+    # Set expiration on Redis viewer keys (7 days) - data is now persisted in DB
+    redis = await get_redis()
+    await redis.expire(f"event:{event_id}:unique_viewers", 86400 * 7)
+    await redis.expire(f"event:{event_id}:live_sessions", 86400 * 7)
 
     summary = await get_auction_summary(event_id, db)
 
