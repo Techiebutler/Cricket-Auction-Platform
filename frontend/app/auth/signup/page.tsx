@@ -8,6 +8,31 @@ import api from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import brandLogo from "@/asset/Logo Png (3).png";
 
+function PasswordInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        className="input pr-11"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="••••••••"
+        required
+        minLength={6}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors text-sm select-none"
+        tabIndex={-1}
+      >
+        {show ? "🙈" : "👁"}
+      </button>
+    </div>
+  );
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -74,15 +99,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label className="label">Password</label>
-            <input
-              type="password"
-              className="input"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="••••••••"
-              required
-              minLength={6}
-            />
+            <PasswordInput value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
           </div>
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? "Creating account..." : "Create Account"}

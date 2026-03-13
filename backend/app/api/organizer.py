@@ -337,6 +337,52 @@ async def update_team(
     return TeamOut.model_validate(team)
 
 
+@router.delete("/events/{event_id}/teams/{team_id}", status_code=204)
+async def delete_team(
+    event_id: int,
+    team_id: int,
+    current_user: User = Depends(require_role(ROLE_ORGANIZER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a team from the event. Only allowed in draft status."""
+    event = await _get_event_for_organizer(event_id, current_user, db)
+    if event.status != AuctionStatus.draft:
+        raise HTTPException(status_code=400, detail="Cannot delete team after event is published")
+
+    result = await db.execute(select(Team).where(Team.id == team_id, Team.event_id == event_id))
+    team = result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # If team has a captain, remove their captain role and revert AuctionPlayer status
+    if team.captain_id:
+        cap_result = await db.execute(select(User).where(User.id == team.captain_id))
+        cap_user = cap_result.scalar_one_or_none()
+        if cap_user:
+            cap_user.remove_role(ROLE_CAPTAIN)
+
+        # Revert captain's AuctionPlayer status back to pending
+        ap_res = await db.execute(
+            select(AuctionPlayer).where(
+                AuctionPlayer.event_id == event_id,
+                AuctionPlayer.player_id == team.captain_id
+            )
+        )
+        ap = ap_res.scalar_one_or_none()
+        if ap and ap.status == PlayerAuctionStatus.sold and ap.current_bid == 0:
+            ap.status = PlayerAuctionStatus.pending
+            ap.current_bidder_id = None
+
+    # Delete all TeamPlayers for this team
+    await db.execute(
+        TeamPlayer.__table__.delete().where(TeamPlayer.team_id == team_id)
+    )
+
+    await db.delete(team)
+    await db.commit()
+    return None
+
+
 @router.post("/events/{event_id}/invite-auctioneer", response_model=dict)
 async def invite_auctioneer(
     event_id: int,

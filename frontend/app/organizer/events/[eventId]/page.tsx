@@ -161,6 +161,8 @@ function TeamsTab({
   setTeamForm,
   onCreateTeam,
   onAssignCaptain,
+  onUpdateTeam,
+  onDeleteTeam,
   editable,
 }: {
   eventId: number;
@@ -170,10 +172,19 @@ function TeamsTab({
   setTeamForm: (f: { name: string; color: string; budget?: string; max_players?: string }) => void;
   onCreateTeam: (e: React.FormEvent) => void;
   onAssignCaptain: (teamId: number, captainId: string) => void;
+  onUpdateTeam: (teamId: number, data: { name?: string; color?: string }) => void;
+  onDeleteTeam: (teamId: number) => void;
   editable: boolean;
 }) {
   const [showForm, setShowForm] = useState(editable && teams.length === 0);
+  const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", color: "" });
   const playerMap = Object.fromEntries(eligiblePlayers.map((p) => [p.id, p]));
+  
+  // Get all captain IDs that are already assigned to other teams
+  const assignedCaptainIds = new Set(
+    teams.filter((t) => t.captain_id !== null).map((t) => t.captain_id as number)
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     await onCreateTeam(e);
@@ -189,6 +200,12 @@ function TeamsTab({
             const captain = team.captain_id ? playerMap[team.captain_id] : null;
             const textColor = isDark(team.color) ? "white" : "#111827";
             const subtextColor = isDark(team.color) ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.5)";
+            const isEditing = editingTeamId === team.id;
+            
+            // Filter out captains assigned to OTHER teams (but keep current team's captain in the list)
+            const availableCaptains = eligiblePlayers.filter(
+              (p) => !assignedCaptainIds.has(p.id) || p.id === team.captain_id
+            );
 
             return (
               <div key={team.id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
@@ -197,23 +214,104 @@ function TeamsTab({
                   className="px-5 py-4 flex items-center justify-between"
                   style={{ backgroundColor: team.color }}
                 >
-                  <div>
-                    <h3 className="font-bold text-lg" style={{ color: textColor }}>{team.name}</h3>
-                    <p className="text-xs mt-0.5" style={{ color: subtextColor }}>
-                      Budget: {team.budget.toLocaleString()} · Max {team.max_players} players
-                    </p>
-                  </div>
-                  {team.captain_id ? (
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium"
-                      style={{ backgroundColor: "rgba(255,255,255,0.2)", color: textColor }}>
-                      ✓ Captain set
-                    </span>
+                  {isEditing ? (
+                    <div className="flex-1 mr-3">
+                      <input
+                        className="input text-sm mb-2"
+                        value={editForm.name}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        placeholder="Team name"
+                        autoFocus
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {COLOR_PRESETS.map((c) => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            onClick={() => setEditForm({ ...editForm, color: c.hex })}
+                            className="w-6 h-6 rounded-md border-2 transition-all"
+                            style={{
+                              backgroundColor: c.hex,
+                              borderColor: editForm.color === c.hex ? "white" : "transparent",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ) : (
-                    <span className="text-xs px-2.5 py-1 rounded-full"
-                      style={{ backgroundColor: "rgba(0,0,0,0.25)", color: isDark(team.color) ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)" }}>
-                      No captain yet
-                    </span>
+                    <div>
+                      <h3 className="font-bold text-lg" style={{ color: textColor }}>{team.name}</h3>
+                      <p className="text-xs mt-0.5" style={{ color: subtextColor }}>
+                        Budget: {team.budget.toLocaleString()} · Max {team.max_players} players
+                      </p>
+                    </div>
                   )}
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600"
+                          onClick={() => {
+                            onUpdateTeam(team.id, editForm);
+                            setEditingTeamId(null);
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium bg-gray-700 text-white hover:bg-gray-600"
+                          onClick={() => setEditingTeamId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {team.captain_id ? (
+                          <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                            style={{ backgroundColor: "rgba(255,255,255,0.2)", color: textColor }}>
+                            ✓ Captain set
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2.5 py-1 rounded-full"
+                            style={{ backgroundColor: "rgba(0,0,0,0.25)", color: isDark(team.color) ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)" }}>
+                            No captain yet
+                          </span>
+                        )}
+                        {editable && (
+                          <>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded-lg hover:bg-white/20 transition-colors"
+                              style={{ color: textColor }}
+                              onClick={() => {
+                                setEditForm({ name: team.name, color: team.color });
+                                setEditingTeamId(team.id);
+                              }}
+                              title="Edit team"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded-lg hover:bg-red-500/30 transition-colors"
+                              style={{ color: textColor }}
+                              onClick={() => {
+                                if (confirm(`Delete team "${team.name}"?`)) {
+                                  onDeleteTeam(team.id);
+                                }
+                              }}
+                              title="Delete team"
+                            >
+                              🗑️
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Captain section */}
@@ -241,7 +339,7 @@ function TeamsTab({
                       onChange={(e) => onAssignCaptain(team.id, e.target.value)}
                     >
                       <option value="">{captain ? "Change captain..." : "— Select captain —"}</option>
-                      {eligiblePlayers.map((p) => (
+                      {availableCaptains.map((p) => (
                         <option key={p.id} value={p.id}>{p.name} · {p.email}</option>
                       ))}
                     </select>
@@ -624,6 +722,28 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
+  const updateTeam = async (teamId: number, data: { name?: string; color?: string }) => {
+    try {
+      await api.patch(`/organizer/events/${eid}/teams/${teamId}`, data);
+      await fetchAll();
+      showToast("ok", "Team updated");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast("err", msg || "Failed to update team");
+    }
+  };
+
+  const deleteTeam = async (teamId: number) => {
+    try {
+      await api.delete(`/organizer/events/${eid}/teams/${teamId}`);
+      await fetchAll();
+      showToast("ok", "Team deleted");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast("err", msg || "Failed to delete team");
+    }
+  };
+
   const markReady = async () => {
     setMarkingReady(true);
     try {
@@ -842,7 +962,9 @@ export default function OrganizerEventDetailPage() {
                 setTeamForm={setTeamForm}
                 onCreateTeam={createTeam}
                 onAssignCaptain={assignCaptain}
-                 editable={isDraft}
+                onUpdateTeam={updateTeam}
+                onDeleteTeam={deleteTeam}
+                editable={isDraft}
               />
             )}
 
