@@ -79,8 +79,10 @@ services:
         condition: service_started
     labels:
       - traefik.enable=true
-      - traefik.http.routers.backend.rule=Host(`${PUBLIC_DOMAI
-      
+      - traefik.http.routers.backend.rule=Host(`$${PUBLIC_DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend.entrypoints=websecure
+      - traefik.http.routers.backend.tls.certresolver=letsencrypt
+      - traefik.http.services.backend.loadbalancer.server.port=8000
     restart: always
 
   worker:
@@ -118,7 +120,7 @@ services:
       - traefik
     labels:
       - traefik.enable=true
-      - traefik.http.routers.frontend.rule=Host(`${PUBLIC_DOMAIN}`)
+      - traefik.http.routers.frontend.rule=Host(`$${PUBLIC_DOMAIN}`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
       - traefik.http.services.frontend.loadbalancer.server.port=3000
