@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
+from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.models.user import User, ROLE_AUCTIONEER, ROLE_CAPTAIN
 from app.models.auction import AuctionEvent, AuctionPlayer, AuctionStatus, PlayerAuctionStatus, Team
@@ -22,13 +23,28 @@ router = APIRouter(prefix="/auction", tags=["auction"])
 
 
 async def _get_active_player(event_id: int, db: AsyncSession) -> AuctionPlayer | None:
+    # Prefer Redis pointer when available to avoid ambiguity if bad historical data
+    # has more than one row marked as active.
+    redis = await get_redis()
+    active_player_id = await redis.get(f"auction:{event_id}:active_player")
+    if active_player_id:
+        by_id = await db.execute(
+            select(AuctionPlayer).where(
+                AuctionPlayer.id == int(active_player_id),
+                AuctionPlayer.event_id == event_id,
+            )
+        )
+        ap = by_id.scalar_one_or_none()
+        if ap:
+            return ap
+
     result = await db.execute(
         select(AuctionPlayer).where(
             AuctionPlayer.event_id == event_id,
             AuctionPlayer.status == PlayerAuctionStatus.active,
         )
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 @router.get("/events/{event_id}", response_model=AuctionEventOut)
@@ -51,6 +67,21 @@ async def get_state(
     db: AsyncSession = Depends(get_db),
 ):
     return await auction_service.get_auction_state(event_id, db)
+
+
+@router.get("/events/{event_id}/summary")
+async def get_summary(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(AuctionEvent).where(AuctionEvent.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.status != AuctionStatus.completed:
+        raise HTTPException(status_code=400, detail="Summary is available after auction completion")
+    return await auction_service.get_auction_summary(event_id, db)
 
 
 @router.get("/events/{event_id}/players", response_model=list[AuctionPlayerOut])

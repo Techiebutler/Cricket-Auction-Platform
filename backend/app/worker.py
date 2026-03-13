@@ -64,6 +64,17 @@ async def task_send_player_sold(
     email_service.send_player_sold(to, captain_name, player_name, team_name, sold_price, event_id)
 
 
+async def task_send_event_completion_summary(
+    ctx: dict,
+    to: str,
+    name: str,
+    event_name: str,
+    event_id: int,
+    summary: dict,
+):
+    email_service.send_event_completion_summary(to, name, event_name, event_id, summary)
+
+
 # ─── Worker configuration ─────────────────────────────────────────────────────
 
 class WorkerSettings:
@@ -74,6 +85,7 @@ class WorkerSettings:
         task_send_welcome,
         task_send_auction_starting,
         task_send_player_sold,
+        task_send_event_completion_summary,
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_jobs = 10

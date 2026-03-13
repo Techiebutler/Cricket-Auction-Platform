@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.auction import AuctionStatus, PlayerAuctionStatus
 
@@ -20,8 +20,9 @@ class AuctionEventUpdate(BaseModel):
     auctioneer_id: Optional[int] = None
     allowed_domains: Optional[list[str]] = None
     scheduled_at: Optional[datetime] = None
-    team_budget: Optional[int] = None
+    team_budget: Optional[int] = Field(default=None, ge=1000)
     team_max_players: Optional[int] = None
+    player_base_price: Optional[int] = Field(default=None, ge=100)
 
 
 class AuctionEventOut(BaseModel):
@@ -36,6 +37,7 @@ class AuctionEventOut(BaseModel):
     scheduled_at: Optional[datetime]
     team_budget: int
     team_max_players: int
+    player_base_price: int
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -81,7 +83,7 @@ class TeamOut(BaseModel):
 
 class AuctionPlayerCreate(BaseModel):
     player_id: int
-    base_price: int = 100
+    base_price: int | None = None
 
 
 class AuctionPlayerOut(BaseModel):

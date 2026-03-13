@@ -40,6 +40,9 @@ class AuctionEvent(Base):
     # Global budget and max players per team
     team_budget: Mapped[int] = mapped_column(Integer, default=100000)
     team_max_players: Mapped[int] = mapped_column(Integer, default=15)
+    
+    # Global player base price
+    player_base_price: Mapped[int] = mapped_column(Integer, default=100)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

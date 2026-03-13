@@ -41,6 +41,7 @@ interface EventDetail {
   scheduled_at: string | null;
   team_budget: number;
   team_max_players: number;
+  player_base_price: number;
 }
 
 interface Readiness {
@@ -536,9 +537,9 @@ export default function OrganizerEventDetailPage() {
   const [auctionPlayers, setAuctionPlayers] = useState<AuctionPlayer[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [tab, setTab] = useState<"players" | "teams" | "auctioneer">("players");
+  const [tab, setTab] = useState<"players" | "teams" | "auctioneer" | "settings">("players");
   const [teamForm, setTeamForm] = useState({ name: "", color: "#3B82F6" });
-  const [settingsForm, setSettingsForm] = useState({ budget: "100000", max_players: "15" });
+  const [settingsForm, setSettingsForm] = useState({ budget: "100000", max_players: "15", base_price: "100" });
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [markingReady, setMarkingReady] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
@@ -563,6 +564,7 @@ export default function OrganizerEventDetailPage() {
       setSettingsForm({
         budget: evRes.data.team_budget?.toString() || "100000",
         max_players: evRes.data.team_max_players?.toString() || "15",
+        base_price: evRes.data.player_base_price?.toString() || "100",
       });
     }
     setEligiblePlayers(eligible.data);
@@ -577,7 +579,7 @@ export default function OrganizerEventDetailPage() {
 
   const addPlayer = async (playerId: number) => {
     try {
-      await api.post(`/organizer/events/${eid}/players`, { player_id: playerId, base_price: 100 });
+      await api.post(`/organizer/events/${eid}/players`, { player_id: playerId });
       await fetchAll();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -648,6 +650,7 @@ export default function OrganizerEventDetailPage() {
         scheduled_at: scheduleInput ? new Date(scheduleInput).toISOString() : null,
         team_budget: parseInt(settingsForm.budget),
         team_max_players: parseInt(settingsForm.max_players),
+        player_base_price: parseInt(settingsForm.base_price),
       };
       const { data } = await api.patch(`/organizer/events/${eid}/settings`, payload);
       setEvent(data);
@@ -928,6 +931,20 @@ export default function OrganizerEventDetailPage() {
                           max={25}
                           value={settingsForm.max_players}
                           onChange={(e) => isDraft && setSettingsForm({ ...settingsForm, max_players: e.target.value })}
+                          disabled={!isDraft}
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-gray-300 mb-1 block">Player Base Price</label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Starting bid amount for all players.
+                        </p>
+                        <input
+                          className={`input max-w-sm ${!isDraft ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
+                          type="number"
+                          min={1}
+                          value={settingsForm.base_price}
+                          onChange={(e) => isDraft && setSettingsForm({ ...settingsForm, base_price: e.target.value })}
                           disabled={!isDraft}
                         />
                       </div>

@@ -87,6 +87,134 @@ async def get_auction_state(event_id: int, db: AsyncSession) -> dict:
     }
 
 
+async def get_auction_summary(event_id: int, db: AsyncSession) -> dict:
+    """Build completed-auction summary used by UI and emails."""
+    event_result = await db.execute(select(AuctionEvent).where(AuctionEvent.id == event_id))
+    event = event_result.scalar_one_or_none()
+    if not event:
+        return {}
+
+    teams_result = await db.execute(select(Team).where(Team.event_id == event_id))
+    teams = teams_result.scalars().all()
+
+    aps_result = await db.execute(select(AuctionPlayer).where(AuctionPlayer.event_id == event_id))
+    auction_players = aps_result.scalars().all()
+
+    player_ids: set[int] = {ap.player_id for ap in auction_players}
+    for t in teams:
+        player_ids.update(tp.player_id for tp in (t.players or []))
+        if t.captain_id:
+            player_ids.add(t.captain_id)
+
+    users_by_id: dict[int, User] = {}
+    if player_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(player_ids)))
+        users = users_result.scalars().all()
+        users_by_id = {u.id: u for u in users}
+
+    sold_players = [ap for ap in auction_players if ap.status == PlayerAuctionStatus.sold]
+    unsold_players = [ap for ap in auction_players if ap.status == PlayerAuctionStatus.unsold]
+
+    highest_bid_player = None
+    if sold_players:
+        top = max(sold_players, key=lambda ap: ap.current_bid)
+        top_team = next((t for t in teams if t.captain_id == top.current_bidder_id), None)
+        highest_bid_player = {
+            "player_id": top.player_id,
+            "player_name": users_by_id.get(top.player_id).name if users_by_id.get(top.player_id) else f"Player #{top.player_id}",
+            "sold_price": top.current_bid,
+            "team_name": top_team.name if top_team else "Unknown Team",
+        }
+
+    teams_summary = []
+    strongest_team = None
+    best_rating = -1.0
+    for t in teams:
+        roster = []
+        rating_total = 0.0
+        batting_total = 0.0
+        bowling_total = 0.0
+        fielding_total = 0.0
+        for tp in (t.players or []):
+            pu = users_by_id.get(tp.player_id)
+            batting = pu.batting_rating if pu else 0.0
+            bowling = pu.bowling_rating if pu else 0.0
+            fielding = pu.fielding_rating if pu else 0.0
+            rating_score = batting + bowling + fielding
+            rating_total += rating_score
+            batting_total += batting
+            bowling_total += bowling
+            fielding_total += fielding
+            roster.append(
+                {
+                    "player_id": tp.player_id,
+                    "name": pu.name if pu else f"Player #{tp.player_id}",
+                    "sold_price": tp.sold_price,
+                    "rating_score": round(rating_score, 2),
+                }
+            )
+        roster.sort(key=lambda x: x["sold_price"], reverse=True)
+        players_count = len(roster)
+        batting_avg = (batting_total / players_count) if players_count else 0.0
+        bowling_avg = (bowling_total / players_count) if players_count else 0.0
+        fielding_avg = (fielding_total / players_count) if players_count else 0.0
+        overall_rating = (batting_avg + bowling_avg + fielding_avg) / 3 if players_count else 0.0
+        summary_item = {
+            "team_id": t.id,
+            "team_name": t.name,
+            "captain_id": t.captain_id,
+            "captain_name": users_by_id.get(t.captain_id).name if t.captain_id and users_by_id.get(t.captain_id) else None,
+            "spent": t.spent,
+            "budget": t.budget,
+            "remaining": t.budget - t.spent,
+            "player_count": players_count,
+            "average_rating": round(overall_rating, 2),
+            "total_rating": round(rating_total, 2),
+            "batting_avg": round(batting_avg, 2),
+            "bowling_avg": round(bowling_avg, 2),
+            "fielding_avg": round(fielding_avg, 2),
+            "overall_rating": round(overall_rating, 2),
+            "players": roster,
+        }
+        teams_summary.append(summary_item)
+        if overall_rating > best_rating:
+            best_rating = overall_rating
+            strongest_team = {
+                "team_id": t.id,
+                "team_name": t.name,
+                "overall_rating": round(overall_rating, 2),
+                "batting_avg": round(batting_avg, 2),
+                "bowling_avg": round(bowling_avg, 2),
+                "fielding_avg": round(fielding_avg, 2),
+                "player_count": players_count,
+            }
+
+    unsold_summary = [
+        {
+            "player_id": ap.player_id,
+            "name": users_by_id.get(ap.player_id).name if users_by_id.get(ap.player_id) else f"Player #{ap.player_id}",
+            "base_price": ap.base_price,
+            "last_bid": ap.current_bid,
+        }
+        for ap in unsold_players
+    ]
+
+    return {
+        "event_id": event.id,
+        "event_name": event.name,
+        "status": event.status,
+        "highest_bid_player": highest_bid_player,
+        "strongest_team": strongest_team,
+        "teams": teams_summary,
+        "unsold_players": unsold_summary,
+        "stats": {
+            "total_players": len(auction_players),
+            "sold_count": len(sold_players),
+            "unsold_count": len(unsold_players),
+        },
+    }
+
+
 async def start_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     result = await db.execute(select(AuctionEvent).where(AuctionEvent.id == event_id))
     event = result.scalar_one_or_none()
@@ -186,6 +314,36 @@ async def finish_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     await db.commit()
     await db.refresh(event)
 
+    summary = await get_auction_summary(event_id, db)
+
+    # Email completion summary to all event participants.
+    participant_ids: set[int] = set()
+    teams_result = await db.execute(select(Team).where(Team.event_id == event_id))
+    teams = teams_result.scalars().all()
+    participant_ids.update(t.captain_id for t in teams if t.captain_id is not None)
+
+    aps_result = await db.execute(select(AuctionPlayer).where(AuctionPlayer.event_id == event_id))
+    participant_ids.update(ap.player_id for ap in aps_result.scalars().all())
+
+    if event.auctioneer_id:
+        participant_ids.add(event.auctioneer_id)
+    if event.organizer_id:
+        participant_ids.add(event.organizer_id)
+    if event.admin_id:
+        participant_ids.add(event.admin_id)
+
+    if participant_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(participant_ids)))
+        for u in users_result.scalars().all():
+            await enqueue(
+                "task_send_event_completion_summary",
+                u.email,
+                u.name,
+                event.name,
+                event_id,
+                summary,
+            )
+
     await manager.broadcast(event_id, {"type": "auction_completed", "event_id": event_id})
     return event
 
@@ -200,6 +358,20 @@ async def set_next_player(
     if task:
         task.cancel()
 
+    # Defensive normalization: if any stale rows are still marked active
+    # (e.g. from old runs/crashes), mark them unsold before moving next.
+    stale_active_res = await db.execute(
+        select(AuctionPlayer).where(
+            AuctionPlayer.event_id == event_id,
+            AuctionPlayer.status == PlayerAuctionStatus.active,
+        )
+    )
+    for stale in stale_active_res.scalars().all():
+        stale.status = PlayerAuctionStatus.unsold
+
+    teams_result = await db.execute(select(Team).where(Team.event_id == event_id))
+    captain_ids = {t.captain_id for t in teams_result.scalars().all() if t.captain_id is not None}
+
     if player_id is None:
         # Random pending player
         result = await db.execute(
@@ -208,7 +380,7 @@ async def set_next_player(
                 AuctionPlayer.status == PlayerAuctionStatus.pending,
             )
         )
-        pending = result.scalars().all()
+        pending = [p for p in result.scalars().all() if p.player_id not in captain_ids]
         if not pending:
             raise ValueError("No pending players left")
         ap = random.choice(pending)
@@ -222,6 +394,8 @@ async def set_next_player(
         ap = result.scalar_one_or_none()
         if not ap:
             raise ValueError("Player not found in event")
+        if ap.player_id in captain_ids:
+            raise ValueError("Team captains cannot be auctioned")
         # Allow re-auctioning unsold players
         if ap.status not in (PlayerAuctionStatus.pending, PlayerAuctionStatus.unsold):
             raise ValueError("Player already auctioned")
@@ -298,8 +472,40 @@ async def place_bid(
     if ap.player_id == captain_id:
         raise ValueError("You cannot bid on yourself")
 
+    # Enforce turn-based bidding: same team/captain cannot bid twice in a row.
+    if ap.current_bidder_id == captain_id:
+        raise ValueError("Wait for another team to bid before bidding again")
+
     if amount <= ap.current_bid:
         raise ValueError(f"Bid must be higher than current bid ({ap.current_bid})")
+
+    # Tier-based minimum increment validation
+    # >= 10000 => step 10000
+    # >= 1000  => step 1000
+    # < 1000   => step 50
+    min_step = 50
+    if ap.current_bid >= 10000:
+        min_step = 10000
+    elif ap.current_bid >= 1000:
+        min_step = 1000
+
+    increment = amount - ap.current_bid
+    if increment < min_step:
+        raise ValueError(
+            f"Minimum increment for current bid is {min_step}"
+        )
+    if increment % min_step != 0:
+        raise ValueError(
+            f"Bid increment must be in multiples of {min_step}"
+        )
+
+    # Guard against unrealistic jump bids:
+    # next bid cannot exceed 50% above current bid.
+    max_allowed_bid = ap.current_bid + (ap.current_bid // 2)
+    if amount > max_allowed_bid:
+        raise ValueError(
+            f"Bid cannot exceed 50% of current bid. Max allowed: {max_allowed_bid}"
+        )
 
     # Check captain's team budget
     team_result = await db.execute(
@@ -330,9 +536,17 @@ async def place_bid(
     await db.commit()
     await db.refresh(ap)
 
-    # Reset timer
+    # Reset timer to full duration on every valid bid.
+    # We restart the timer task so countdown truly resets to 60.
+    task = _timer_tasks.pop(event_id, None)
+    if task and not task.done():
+        task.cancel()
+
     redis = await get_redis()
     await redis.set(_timer_key(event_id), TIMER_SECONDS)
+
+    task = asyncio.create_task(_run_timer(event_id, auction_player_id))
+    _timer_tasks[event_id] = task
 
     await manager.broadcast(
         event_id,
@@ -362,7 +576,9 @@ async def hammer_player(event_id: int, auction_player_id: int, db: AsyncSession)
 
     # Cancel timer task if manually hammered
     task = _timer_tasks.pop(event_id, None)
-    if task and not task.done():
+    current = asyncio.current_task()
+    # Don't cancel the currently-running timer task itself during auto-hammer.
+    if task and not task.done() and task is not current:
         task.cancel()
 
     if ap.current_bidder_id:

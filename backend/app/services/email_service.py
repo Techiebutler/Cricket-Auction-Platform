@@ -294,3 +294,111 @@ def send_auction_summary(
         + _p(f"Thanks for participating in <strong style='color:#f9fafb;'>{event_name}</strong>. See you on the pitch!"),
     )
     _send(to, f"{event_name} auction complete — your squad summary 🏏", html)
+
+
+def send_event_completion_summary(
+    to: str,
+    name: str,
+    event_name: str,
+    event_id: int,
+    summary: dict,
+) -> None:
+    """Event-wide completion summary sent to all participants."""
+    highest = summary.get("highest_bid_player") or {}
+    strongest = summary.get("strongest_team") or {}
+    teams = summary.get("teams") or []
+    unsold = summary.get("unsold_players") or []
+    stats = summary.get("stats") or {}
+
+    highest_html = (
+        f'<p style="margin:0;font-size:14px;color:#d1d5db;">'
+        f'<strong style="color:#f9fafb;">{highest.get("player_name", "-")}</strong> · '
+        f'₹{highest.get("sold_price", 0)} · '
+        f'<span style="color:#86efac;">{highest.get("team_name", "-")}</span>'
+        f"</p>"
+        if highest
+        else '<p style="margin:0;font-size:14px;color:#6b7280;">No sold players.</p>'
+    )
+
+    strongest_html = (
+        f'<p style="margin:0;font-size:14px;color:#d1d5db;">'
+        f'<strong style="color:#f9fafb;">{strongest.get("team_name", "-")}</strong> · '
+        f'Overall avg {strongest.get("overall_rating", 0)} '
+        f'(Bat {strongest.get("batting_avg", 0)}, Bowl {strongest.get("bowling_avg", 0)}, Field {strongest.get("fielding_avg", 0)})'
+        f"</p>"
+        if strongest
+        else '<p style="margin:0;font-size:14px;color:#6b7280;">No teams available.</p>'
+    )
+
+    team_blocks = ""
+    for t in teams:
+        players = t.get("players", [])
+        top_players = players[:8]
+        rows = "".join(
+            f'<tr>'
+            f'<td style="padding:6px 10px;color:#e5e7eb;font-size:12px;">{p.get("name")}</td>'
+            f'<td style="padding:6px 10px;color:#f59e0b;font-size:12px;text-align:right;">₹{p.get("sold_price")}</td>'
+            f"</tr>"
+            for p in top_players
+        )
+        if not rows:
+            rows = '<tr><td colspan="2" style="padding:8px 10px;color:#6b7280;font-size:12px;">No players</td></tr>'
+        overflow_note = (
+            f'<p style="margin:6px 0 0;color:#6b7280;font-size:11px;">+{len(players)-8} more players</p>'
+            if len(players) > 8
+            else ""
+        )
+        team_blocks += (
+            f'<div style="background:#1f2937;border:1px solid #374151;border-radius:10px;padding:10px;margin:10px 0;">'
+            f'<p style="margin:0 0 6px;font-size:14px;color:#f9fafb;font-weight:700;">{t.get("team_name")}</p>'
+            f'<p style="margin:0 0 8px;font-size:12px;color:#9ca3af;">Players: {t.get("player_count")} · Spent: {t.get("spent")} · Left: {t.get("remaining")}</p>'
+            f'<table width="100%" cellpadding="0" cellspacing="0">{rows}</table>'
+            f"{overflow_note}"
+            f"</div>"
+        )
+
+    unsold_rows = "".join(
+        f'<tr>'
+        f'<td style="padding:6px 10px;color:#e5e7eb;font-size:12px;">{p.get("name")}</td>'
+        f'<td style="padding:6px 10px;color:#9ca3af;font-size:12px;text-align:right;">Base ₹{p.get("base_price")}</td>'
+        f"</tr>"
+        for p in unsold[:15]
+    )
+    if not unsold_rows:
+        unsold_rows = '<tr><td colspan="2" style="padding:8px 10px;color:#6b7280;font-size:12px;">No unsold players</td></tr>'
+    unsold_more = (
+        f'<p style="margin:6px 0 0;color:#6b7280;font-size:11px;">+{len(unsold)-15} more unsold players</p>'
+        if len(unsold) > 15
+        else ""
+    )
+
+    body = (
+        _h2(f"Auction completed: {event_name} ✅")
+        + _p(f"Hi {name}, here is the final event summary.")
+        + _stat_row(
+            [
+                ("Total Players", str(stats.get("total_players", 0))),
+                ("Sold", str(stats.get("sold_count", 0))),
+                ("Unsold", str(stats.get("unsold_count", 0))),
+            ]
+        )
+        + '<div style="background:#1f2937;border-radius:10px;padding:12px;margin:14px 0;">'
+        + '<p style="margin:0 0 6px;color:#9ca3af;font-size:12px;text-transform:uppercase;">Highest Bid Player</p>'
+        + highest_html
+        + "</div>"
+        + '<div style="background:#1f2937;border-radius:10px;padding:12px;margin:14px 0;">'
+        + '<p style="margin:0 0 6px;color:#9ca3af;font-size:12px;text-transform:uppercase;">Most Powerful Team (ratings)</p>'
+        + strongest_html
+        + "</div>"
+        + '<h3 style="margin:18px 0 8px;color:#f3f4f6;font-size:15px;">Teams and Players</h3>'
+        + team_blocks
+        + '<h3 style="margin:18px 0 8px;color:#f3f4f6;font-size:15px;">Unsold Players</h3>'
+        + '<div style="background:#1f2937;border:1px solid #374151;border-radius:10px;padding:8px;">'
+        + f'<table width="100%" cellpadding="0" cellspacing="0">{unsold_rows}</table>'
+        + unsold_more
+        + "</div>"
+        + _btn("View Auction", f"http://localhost/auction/{event_id}/spectate")
+    )
+
+    html = _base_template(f"{event_name} — Completed Summary", body)
+    _send(to, f"{event_name} completed — full auction summary", html)

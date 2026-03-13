@@ -58,7 +58,6 @@ export const useAuctionStore = create<AuctionState>((set) => ({
 
   markPlayerSold: (auctionPlayerId, captainId, price) =>
     set((prev) => ({
-      activePlayerId: null,
       players: prev.players.map((p) =>
         p.id === auctionPlayerId ? { ...p, status: "sold" as const } : p
       ),
@@ -71,7 +70,6 @@ export const useAuctionStore = create<AuctionState>((set) => ({
 
   markPlayerUnsold: (auctionPlayerId) =>
     set((prev) => ({
-      activePlayerId: null,
       players: prev.players.map((p) =>
         p.id === auctionPlayerId ? { ...p, status: "unsold" as const } : p
       ),

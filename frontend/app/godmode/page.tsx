@@ -104,9 +104,11 @@ export default function GodmodePage() {
             </button>
           </form>
 
-          <p className="text-center text-gray-600 text-xs mt-4">
-            Default secret in dev: <code className="text-amber-500">GODMODE_CHANGEME</code>
-          </p>
+          {process.env.NODE_ENV !== "production" && (
+            <p className="text-center text-gray-600 text-xs mt-4">
+              Default secret in dev: <code className="text-amber-500">GODMODE_CHANGEME</code>
+            </p>
+          )}
         </div>
       </div>
     </div>

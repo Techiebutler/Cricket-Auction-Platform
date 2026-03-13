@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 
@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.deps import require_role
 from app.core.redis import get_redis
 from app.models.user import User, ROLE_ORGANIZER, ROLE_CAPTAIN, ROLE_AUCTIONEER
-from app.models.auction import AuctionEvent, Team, AuctionPlayer, AuctionStatus
+from app.models.auction import AuctionEvent, Team, AuctionPlayer, AuctionStatus, TeamPlayer, PlayerAuctionStatus
 from app.schemas.auction import (
     AuctionPlayerCreate,
     AuctionPlayerOut,
@@ -37,8 +37,9 @@ class PlayerInvitePayload(BaseModel):
 
 class EventSettingsUpdatePayload(BaseModel):
     scheduled_at: datetime | None = None
-    team_budget: int | None = None
+    team_budget: int | None = Field(default=None, ge=1000)
     team_max_players: int | None = None
+    player_base_price: int | None = Field(default=None, ge=100)
 
 router = APIRouter(prefix="/organizer", tags=["organizer"])
 
@@ -143,7 +144,7 @@ async def add_player(
     ap = AuctionPlayer(
         event_id=event_id,
         player_id=payload.player_id,
-        base_price=payload.base_price,
+        base_price=event.player_base_price,
         auction_order=count + 1,
     )
     db.add(ap)
@@ -256,13 +257,76 @@ async def update_team(
         if cap_user:
             cap_user.add_role(ROLE_CAPTAIN)
             # Email queued — will fire when organizer marks event ready
-        # Remove captain role from old captain if changing
+
+        # Handle removing old captain from roster if changing
         if team.captain_id and team.captain_id != payload.captain_id:
             old_cap_result = await db.execute(select(User).where(User.id == team.captain_id))
             old_cap = old_cap_result.scalar_one_or_none()
             if old_cap:
                 old_cap.remove_role(ROLE_CAPTAIN)
+            
+            # Remove old captain from TeamPlayer (if they were added for 0 price)
+            old_tp_res = await db.execute(
+                select(TeamPlayer).where(
+                    TeamPlayer.team_id == team.id,
+                    TeamPlayer.player_id == team.captain_id,
+                    TeamPlayer.sold_price == 0
+                )
+            )
+            old_tp = old_tp_res.scalar_one_or_none()
+            if old_tp:
+                await db.delete(old_tp)
+                
+            # Revert old captain in AuctionPlayer back to pending
+            old_ap_res = await db.execute(
+                select(AuctionPlayer).where(
+                    AuctionPlayer.event_id == event_id,
+                    AuctionPlayer.player_id == team.captain_id
+                )
+            )
+            old_ap = old_ap_res.scalar_one_or_none()
+            if old_ap and old_ap.status == PlayerAuctionStatus.sold and old_ap.current_bid == 0:
+                old_ap.status = PlayerAuctionStatus.pending
+                old_ap.current_bidder_id = None
+                old_ap.current_bid = 0
+
         team.captain_id = payload.captain_id
+        
+        # Add new captain to TeamPlayer if not already there
+        tp_res = await db.execute(
+            select(TeamPlayer).where(
+                TeamPlayer.team_id == team.id,
+                TeamPlayer.player_id == payload.captain_id
+            )
+        )
+        if not tp_res.scalar_one_or_none():
+            tp = TeamPlayer(team_id=team.id, player_id=payload.captain_id, sold_price=0)
+            db.add(tp)
+            
+        # Ensure new captain is in AuctionPlayer and marked as 'sold'
+        ap_res = await db.execute(
+            select(AuctionPlayer).where(
+                AuctionPlayer.event_id == event_id,
+                AuctionPlayer.player_id == payload.captain_id
+            )
+        )
+        ap = ap_res.scalar_one_or_none()
+        if ap:
+            ap.status = PlayerAuctionStatus.sold
+            ap.current_bidder_id = payload.captain_id
+            ap.current_bid = 0
+        else:
+            ap = AuctionPlayer(
+                event_id=event_id,
+                player_id=payload.captain_id,
+                base_price=event.player_base_price,
+                status=PlayerAuctionStatus.sold,
+                current_bid=0,
+                current_bidder_id=payload.captain_id,
+                auction_order=0
+            )
+            db.add(ap)
+
     if payload.budget is not None:
         team.budget = payload.budget
     if payload.max_players is not None:
@@ -329,7 +393,7 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Allow organizer to adjust the auction date/time, global budget, and max players for their event.
+    Allow organizer to adjust the auction date/time, global budget, max players, and player base price for their event.
     """
     event = await _get_event_for_organizer(event_id, current_user, db)
     if event.status != AuctionStatus.draft:
@@ -340,6 +404,8 @@ async def update_settings(
         event.team_budget = payload.team_budget
     if payload.team_max_players is not None:
         event.team_max_players = payload.team_max_players
+    if payload.player_base_price is not None:
+        event.player_base_price = payload.player_base_price
 
     # Also update all existing teams in this event
     if payload.team_budget is not None or payload.team_max_players is not None:
@@ -350,6 +416,13 @@ async def update_settings(
                 t.budget = payload.team_budget
             if payload.team_max_players is not None:
                 t.max_players = payload.team_max_players
+                
+    # Update existing players' base prices if it changed
+    if payload.player_base_price is not None:
+        players_result = await db.execute(select(AuctionPlayer).where(AuctionPlayer.event_id == event_id))
+        players = players_result.scalars().all()
+        for p in players:
+            p.base_price = payload.player_base_price
 
     await db.commit()
     await db.refresh(event)
@@ -483,7 +556,7 @@ async def invite_player(
         ap = AuctionPlayer(
             event_id=event_id,
             player_id=user.id,
-            base_price=100,
+            base_price=event.player_base_price,
             auction_order=count + 1,
         )
         db.add(ap)
