@@ -73,6 +73,7 @@ export default function CaptainPage() {
   const [bookmarked, setBookmarked] = useState<number[]>([]);
   const [playerFilter, setPlayerFilter] = useState<"all" | "pending" | "unsold">("pending");
   const [socket, setSocket] = useState<AuctionSocket | null>(null);
+  const [viewerCount, setViewerCount] = useState<number>(0);
 
   const BOOKMARK_KEY = `captain_bookmarks_${eid}`;
 
@@ -189,6 +190,7 @@ export default function CaptainPage() {
       if (msg.type === "auction_resumed") store.setFullState({ status: "active" });
       if (msg.type === "auction_paused") store.setFullState({ status: "paused" });
       if (msg.type === "auction_completed") store.setFullState({ status: "completed" });
+      if (msg.type === "viewer_count") setViewerCount(msg.count as number);
     });
 
     api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
@@ -345,6 +347,10 @@ export default function CaptainPage() {
         </div>
         {myTeam && (
           <div className="flex gap-6 text-center">
+            <div>
+              <p className="text-xl font-bold text-blue-400">{viewerCount}</p>
+              <p className="text-xs text-gray-500">Watching</p>
+            </div>
             <div>
               <p className="text-xl font-bold text-amber-400">{remaining}</p>
               <p className="text-xs text-gray-500">Budget Left</p>

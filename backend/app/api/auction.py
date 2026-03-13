@@ -253,7 +253,7 @@ async def websocket_endpoint(event_id: int, websocket: WebSocket, token: str = "
     # Validate token for WS connections
     user_id = decode_token(token) if token else None
 
-    await manager.connect(event_id, websocket)
+    await manager.connect(event_id, websocket, user_id)
     try:
         # Send current state on connect
         from app.core.database import AsyncSessionLocal
@@ -266,4 +266,11 @@ async def websocket_endpoint(event_id: int, websocket: WebSocket, token: str = "
             data = await websocket.receive_text()
             # Clients can send ping to keep alive
     except WebSocketDisconnect:
-        manager.disconnect(event_id, websocket)
+        await manager.disconnect(event_id, websocket)
+
+
+@router.get("/events/{event_id}/viewer-stats")
+async def get_viewer_stats(event_id: int):
+    """Get live and total unique viewer counts for an event."""
+    stats = await manager.get_viewer_stats(event_id)
+    return stats

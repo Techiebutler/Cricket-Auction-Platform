@@ -199,6 +199,16 @@ async def get_auction_summary(event_id: int, db: AsyncSession) -> dict:
         for ap in unsold_players
     ]
 
+    # Get viewer stats - use persisted value for completed events
+    if event.status == AuctionStatus.completed and event.total_viewers is not None:
+        viewer_stats = {
+            "live_viewers": 0,
+            "total_unique_viewers": event.total_viewers,
+        }
+    else:
+        from app.ws.manager import manager
+        viewer_stats = await manager.get_viewer_stats(event_id)
+
     return {
         "event_id": event.id,
         "event_name": event.name,
@@ -212,6 +222,7 @@ async def get_auction_summary(event_id: int, db: AsyncSession) -> dict:
             "sold_count": len(sold_players),
             "unsold_count": len(unsold_players),
         },
+        "viewer_stats": viewer_stats,
     }
 
 
@@ -310,6 +321,10 @@ async def finish_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     for ap in active_players_res.scalars().all():
         ap.status = PlayerAuctionStatus.unsold
 
+    # Persist final viewer count before marking as completed
+    viewer_stats = await manager.get_viewer_stats(event_id)
+    event.total_viewers = viewer_stats.get("total_unique_viewers", 0)
+    
     event.status = AuctionStatus.completed
     await db.commit()
     await db.refresh(event)

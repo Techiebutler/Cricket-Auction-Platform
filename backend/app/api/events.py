@@ -33,6 +33,7 @@ class EventCardOut(BaseModel):
     scheduled_at: Optional[datetime]
     created_at: datetime
     my_roles: list[str] = []  # all roles this user has in this event
+    viewer_count: Optional[int] = None  # live viewers or total unique viewers for completed
 
 
 def _can_see_draft(event: AuctionEvent, user: User) -> bool:
@@ -161,6 +162,17 @@ async def _to_card(event: AuctionEvent, user: User, db: AsyncSession) -> EventCa
     if any(p.player_id == uid for p in players):
         my_roles.append("player")
 
+    # Get viewer count for active/completed events
+    viewer_count = None
+    if event.status == AuctionStatus.completed:
+        # Use persisted value from database for completed events
+        viewer_count = event.total_viewers
+    elif event.status in (AuctionStatus.active, AuctionStatus.paused):
+        # Use live count from Redis for active events
+        from app.ws.manager import manager
+        stats = await manager.get_viewer_stats(event.id)
+        viewer_count = stats.get("live_viewers", 0)
+
     return EventCardOut(
         id=event.id,
         name=event.name,
@@ -173,4 +185,5 @@ async def _to_card(event: AuctionEvent, user: User, db: AsyncSession) -> EventCa
         scheduled_at=event.scheduled_at,
         created_at=event.created_at,
         my_roles=my_roles,
+        viewer_count=viewer_count,
     )

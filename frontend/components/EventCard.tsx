@@ -14,6 +14,7 @@ interface EventCard {
   scheduled_at?: string | null;
   created_at: string;
   my_roles?: string[];
+  viewer_count?: number;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
@@ -104,9 +105,9 @@ export default function EventCard({ event }: { event: EventCard }) {
             <h3 className="font-bold text-lg leading-snug truncate group-hover:text-amber-400 transition-colors">
               {event.name}
             </h3>
-            {event.description && (
-              <p className="text-gray-500 text-sm mt-0.5 line-clamp-1">{event.description}</p>
-            )}
+            <p className="text-gray-500 text-sm mt-0.5 line-clamp-1 h-5 overflow-hidden">
+              {event.description || "\u00A0"}
+            </p>
           </div>
           <div className={`flex items-center gap-1.5 shrink-0 ${statusCfg.color}`}>
             <span
@@ -141,10 +142,10 @@ export default function EventCard({ event }: { event: EventCard }) {
             <span>👥</span>
             <span>{event.player_count} players</span>
           </span>
-          {event.allowed_domains.length > 0 && (
-            <span className="flex items-center gap-1 text-xs">
-              <span>@</span>
-              <span className="truncate max-w-24">{event.allowed_domains[0]}</span>
+          {(event.status === "active" || event.status === "completed") && (
+            <span className="flex items-center gap-1 text-blue-400">
+              <span>👁</span>
+              <span>{event.viewer_count ?? 0} {event.status === "completed" ? "watched" : "watching"}</span>
             </span>
           )}
         </div>

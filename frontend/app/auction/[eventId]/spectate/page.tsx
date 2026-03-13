@@ -52,6 +52,7 @@ export default function SpectatePage() {
   const [eventMeta, setEventMeta] = useState<{ name: string; description: string | null; scheduled_at: string | null } | null>(null);
   const [lastShownAuctionPlayerId, setLastShownAuctionPlayerId] = useState<number | null>(null);
   const [completedSummary, setCompletedSummary] = useState<CompletedSummary | null>(null);
+  const [viewerCount, setViewerCount] = useState<number>(0);
 
   const syncState = useCallback(async () => {
     const [stateRes, eventRes, teamRes] = await Promise.all([
@@ -144,6 +145,9 @@ export default function SpectatePage() {
       }
       if (msg.type === "auction_completed") {
         store.setFullState({ status: "completed" });
+      }
+      if (msg.type === "viewer_count") {
+        setViewerCount(msg.count as number);
       }
     });
 
@@ -282,6 +286,10 @@ export default function SpectatePage() {
           </div>
         </div>
         <div className="flex items-center gap-6">
+          <div className="text-center">
+            <p className="text-blue-400 font-bold text-xl">{viewerCount}</p>
+            <p className="text-xs text-gray-500">{store.status === "completed" ? "Watched" : "Watching"}</p>
+          </div>
           <div className="text-center">
             <p className="text-amber-400 font-bold text-xl">{pendingCount}</p>
             <p className="text-xs text-gray-500">Remaining</p>

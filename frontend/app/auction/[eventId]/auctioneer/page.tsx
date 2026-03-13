@@ -21,6 +21,7 @@ export default function AuctioneerPage() {
   const [playerNames, setPlayerNames] = useState<Record<number, string>>({});
   const [playerPhotos, setPlayerPhotos] = useState<Record<number, string>>({});
   const [teamRosters, setTeamRosters] = useState<Record<number, { player_id: number; sold_price: number }[]>>({});
+  const [viewerCount, setViewerCount] = useState<number>(0);
 
   const syncState = useCallback(async () => {
     const [{ data }, teamRes] = await Promise.all([
@@ -102,6 +103,7 @@ export default function AuctioneerPage() {
       if (msg.type === "auction_paused") setStatus("paused");
       if (msg.type === "auction_resumed") setStatus("active");
       if (msg.type === "auction_completed") setStatus("completed");
+      if (msg.type === "viewer_count") setViewerCount(msg.count as number);
     });
 
     setSocket(ws);
@@ -215,6 +217,9 @@ export default function AuctioneerPage() {
             </button>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">Auctioneer Panel</h1>
+              <div className="flex items-center gap-1.5 bg-blue-500/20 text-blue-400 text-xs font-semibold px-2.5 py-1 rounded">
+                <span>👁</span> {viewerCount} watching
+              </div>
               {status === "completed" && (
                 <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-1 rounded">
                   COMPLETED

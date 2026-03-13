@@ -12,6 +12,8 @@ class ConnectionManager:
     def __init__(self):
         # event_id -> list of WebSocket connections
         self._rooms: dict[int, list[WebSocket]] = defaultdict(list)
+        # event_id -> dict of ws -> user_id (for tracking who is connected)
+        self._user_map: dict[int, dict[WebSocket, int | None]] = defaultdict(dict)
         self._pubsub = None
         self._task: asyncio.Task | None = None
 
@@ -46,16 +48,86 @@ class ConnectionManager:
         except Exception as e:
             print(f"Redis pubsub error: {e}")
 
-    async def connect(self, event_id: int, ws: WebSocket):
+    async def connect(self, event_id: int, ws: WebSocket, user_id: int | None = None):
         await ws.accept()
         self._rooms[event_id].append(ws)
+        self._user_map[event_id][ws] = user_id
+        
+        # Track viewer in Redis
+        await self._track_viewer_connect(event_id, user_id)
 
-    def disconnect(self, event_id: int, ws: WebSocket):
+    async def disconnect(self, event_id: int, ws: WebSocket):
+        user_id = self._user_map[event_id].pop(ws, None)
+        
         if ws in self._rooms[event_id]:
             self._rooms[event_id].remove(ws)
         if not self._rooms[event_id]:
             if event_id in self._rooms:
                 del self._rooms[event_id]
+            if event_id in self._user_map:
+                del self._user_map[event_id]
+        
+        # Update viewer count in Redis
+        await self._track_viewer_disconnect(event_id, user_id)
+
+    async def _track_viewer_connect(self, event_id: int, user_id: int | None):
+        """Track viewer connection in Redis and broadcast updated count."""
+        redis = await get_redis()
+        
+        # Increment live viewer count
+        live_key = f"event:{event_id}:live_viewers"
+        await redis.incr(live_key)
+        
+        # Add to unique viewers set (only if user is authenticated)
+        if user_id:
+            unique_key = f"event:{event_id}:unique_viewers"
+            await redis.sadd(unique_key, str(user_id))
+        
+        # Broadcast updated viewer count
+        await self._broadcast_viewer_count(event_id)
+
+    async def _track_viewer_disconnect(self, event_id: int, user_id: int | None):
+        """Track viewer disconnection and broadcast updated count."""
+        redis = await get_redis()
+        
+        # Decrement live viewer count
+        live_key = f"event:{event_id}:live_viewers"
+        count = await redis.decr(live_key)
+        
+        # Ensure count doesn't go negative
+        if count < 0:
+            await redis.set(live_key, 0)
+        
+        # Broadcast updated viewer count
+        await self._broadcast_viewer_count(event_id)
+
+    async def _broadcast_viewer_count(self, event_id: int):
+        """Broadcast current viewer count to all connected clients."""
+        redis = await get_redis()
+        live_key = f"event:{event_id}:live_viewers"
+        count = await redis.get(live_key)
+        viewer_count = int(count) if count else 0
+        
+        await self.broadcast(event_id, {
+            "type": "viewer_count",
+            "event_id": event_id,
+            "count": viewer_count,
+        })
+
+    async def get_viewer_stats(self, event_id: int) -> dict:
+        """Get live and total unique viewer counts for an event."""
+        redis = await get_redis()
+        
+        live_key = f"event:{event_id}:live_viewers"
+        unique_key = f"event:{event_id}:unique_viewers"
+        
+        live_count = await redis.get(live_key)
+        unique_count = await redis.scard(unique_key)
+        
+        return {
+            "live_viewers": int(live_count) if live_count else 0,
+            "total_unique_viewers": unique_count or 0,
+        }
 
     async def broadcast(self, event_id: int, message: dict[str, Any]):
         # Instead of sending directly, publish to Redis so ALL workers receive it

@@ -43,6 +43,9 @@ class AuctionEvent(Base):
     
     # Global player base price (minimum 1000)
     player_base_price: Mapped[int] = mapped_column(Integer, default=1000)
+    
+    # Final viewer count (persisted when event completes)
+    total_viewers: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

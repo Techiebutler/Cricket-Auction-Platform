@@ -19,11 +19,13 @@ interface EventCardData {
   allowed_domains: string[];
   created_at: string;
   my_roles: string[];
+  scheduled_at?: string | null;
+  viewer_count?: number;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, logout, isMultiRole, hasRole } = useAuthStore();
+  const { user, logout, isMultiRole, hasRole, activePanel } = useAuthStore();
   const [allEvents, setAllEvents] = useState<EventCardData[]>([]);
   const [myEvents, setMyEvents] = useState<EventCardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,44 @@ export default function DashboardPage() {
     if (user) fetchEvents();
   }, [user, fetchEvents]);
 
-  const displayEvents = activeTab === "mine" ? myEvents : allEvents;
+  // Sort events: live/active first, then upcoming (ready/paused), then completed
+  // Within each group, sort by scheduled_at descending
+  const sortEvents = (events: EventCardData[]) => {
+    const statusPriority: Record<string, number> = {
+      active: 0,
+      paused: 1,
+      ready: 2,
+      draft: 3,
+      completed: 4,
+    };
+    
+    return [...events].sort((a, b) => {
+      // First sort by status priority
+      const priorityDiff = (statusPriority[a.status] ?? 5) - (statusPriority[b.status] ?? 5);
+      if (priorityDiff !== 0) return priorityDiff;
+      
+      // Then sort by created_at descending (newest first)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  };
+
+  // Filter completed events from "Upcoming Events" tab, show all in "My Events"
+  const filteredAllEvents = allEvents.filter((e) => e.status !== "completed");
+  
+  // If activePanel is "captain", filter to only show events where user is captain
+  const getFilteredMyEvents = () => {
+    if (activePanel === "captain") {
+      return myEvents.filter((e) => e.my_roles.includes("captain"));
+    }
+    return myEvents;
+  };
+  
+  // When in captain mode, always show captain events; otherwise use tab selection
+  const displayEvents = sortEvents(
+    activePanel === "captain" 
+      ? getFilteredMyEvents() 
+      : (activeTab === "mine" ? getFilteredMyEvents() : filteredAllEvents)
+  );
 
   return (
     <>
@@ -165,31 +204,35 @@ export default function DashboardPage() {
           {/* Hero greeting */}
           <div className="mb-8">
             <h1 className="text-3xl font-extrabold mb-1">
-              Hey {user?.name?.split(" ")[0]} 👋
+              {activePanel === "captain" ? "Captain Dashboard ⚡" : `Hey ${user?.name?.split(" ")[0]} 👋`}
             </h1>
             <p className="text-gray-500">
-              {myEvents.length > 0
+              {activePanel === "captain"
+                ? `You're captain in ${getFilteredMyEvents().length} event${getFilteredMyEvents().length !== 1 ? "s" : ""}.`
+                : myEvents.length > 0
                 ? `You're part of ${myEvents.length} auction event${myEvents.length > 1 ? "s" : ""}.`
                 : "Browse events below or wait to be added by an organizer."}
             </p>
           </div>
 
-          {/* Tab switcher */}
-          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-6">
-            {(["all", "mine"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab
-                    ? "bg-amber-500 text-black"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                {tab === "all" ? "All Events" : `My Events${myEvents.length > 0 ? ` (${myEvents.length})` : ""}`}
-              </button>
-            ))}
-          </div>
+          {/* Tab switcher - hide when in captain mode */}
+          {activePanel !== "captain" && (
+            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-6">
+              {(["all", "mine"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab
+                      ? "bg-amber-500 text-black"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {tab === "all" ? "Upcoming Events" : `My Events${myEvents.length > 0 ? ` (${myEvents.length})` : ""}`}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Events grid */}
           {loading ? (
