@@ -79,12 +79,8 @@ services:
         condition: service_started
     labels:
       - traefik.enable=true
-      - traefik.http.routers.backend.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/api`)
-      - traefik.http.routers.backend.entrypoints=websecure
-      - traefik.http.routers.backend.tls.certresolver=letsencrypt
-      - traefik.http.middlewares.api-strip.stripprefix.prefixes=/api
-      - traefik.http.routers.backend.middlewares=api-strip@docker
-      - traefik.http.services.backend.loadbalancer.server.port=8000
+      - traefik.http.routers.backend.rule=Host(`${PUBLIC_DOMAI
+      
     restart: always
 
   worker:
