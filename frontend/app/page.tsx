@@ -41,11 +41,6 @@ export default function LandingPage() {
 
       <footer className="absolute bottom-6 flex items-center gap-4 text-gray-700 text-sm">
         <span>Powered by Techiebutler</span>
-        <span>·</span>
-        {/* Hidden admin bootstrap link */}
-        <Link href="/godmode" className="hover:text-gray-500 transition-colors">
-          ⚙
-        </Link>
       </footer>
     </main>
   );
