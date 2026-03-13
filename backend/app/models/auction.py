@@ -41,8 +41,8 @@ class AuctionEvent(Base):
     team_budget: Mapped[int] = mapped_column(Integer, default=100000)
     team_max_players: Mapped[int] = mapped_column(Integer, default=15)
     
-    # Global player base price
-    player_base_price: Mapped[int] = mapped_column(Integer, default=100)
+    # Global player base price (minimum 1000)
+    player_base_price: Mapped[int] = mapped_column(Integer, default=1000)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -87,7 +87,7 @@ class AuctionPlayer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("auction_events.id"))
     player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    base_price: Mapped[int] = mapped_column(Integer, default=100)
+    base_price: Mapped[int] = mapped_column(Integer, default=1000)
     current_bid: Mapped[int] = mapped_column(Integer, default=0)
     current_bidder_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     status: Mapped[PlayerAuctionStatus] = mapped_column(Enum(PlayerAuctionStatus, name="playerauctionstatus", create_type=False), default=PlayerAuctionStatus.pending)

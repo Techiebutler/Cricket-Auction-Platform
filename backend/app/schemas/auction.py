@@ -22,7 +22,7 @@ class AuctionEventUpdate(BaseModel):
     scheduled_at: Optional[datetime] = None
     team_budget: Optional[int] = Field(default=None, ge=1000)
     team_max_players: Optional[int] = None
-    player_base_price: Optional[int] = Field(default=None, ge=100)
+    player_base_price: Optional[int] = Field(default=None, ge=1000)
 
 
 class AuctionEventOut(BaseModel):

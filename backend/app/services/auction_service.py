@@ -479,20 +479,24 @@ async def place_bid(
     if amount <= ap.current_bid:
         raise ValueError(f"Bid must be higher than current bid ({ap.current_bid})")
 
-    # Tier-based minimum increment validation
-    # >= 10000 => step 10000
-    # >= 1000  => step 1000
-    # < 1000   => step 50
-    min_step = 50
-    if ap.current_bid >= 10000:
+    # Tiered minimum bid increment based on current bid
+    # >= 100000 => step 10000
+    # >= 10000  => step 1000
+    # >= 1000   => step 100
+    # < 1000    => step 50
+    if ap.current_bid >= 100000:
         min_step = 10000
-    elif ap.current_bid >= 1000:
+    elif ap.current_bid >= 10000:
         min_step = 1000
+    elif ap.current_bid >= 1000:
+        min_step = 100
+    else:
+        min_step = 50
 
     increment = amount - ap.current_bid
     if increment < min_step:
         raise ValueError(
-            f"Minimum increment for current bid is {min_step}"
+            f"Minimum increment is {min_step}"
         )
     if increment % min_step != 0:
         raise ValueError(

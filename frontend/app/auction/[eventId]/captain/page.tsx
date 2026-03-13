@@ -46,8 +46,9 @@ interface CompletedSummary {
 }
 
 const getMinBidStep = (currentBid: number) => {
-  if (currentBid >= 10000) return 10000;
-  if (currentBid >= 1000) return 1000;
+  if (currentBid >= 100000) return 10000;
+  if (currentBid >= 10000) return 1000;
+  if (currentBid >= 1000) return 100;
   return 50;
 };
 
@@ -279,9 +280,10 @@ export default function CaptainPage() {
   const iWonPlayer = !!activeAP && activeAP.status === "sold" && activeAP.current_bidder_id === user?.id;
 
   const quickIncrements = (() => {
-    if (effectiveBid >= 10000) return [10000, 20000];
-    if (effectiveBid >= 1000) return [1000, 2000];
-    return [50, 100, 500];
+    if (effectiveBid >= 100000) return [10000, 20000, 50000];
+    if (effectiveBid >= 10000) return [1000, 2000, 5000];
+    if (effectiveBid >= 1000) return [100, 200, 500];
+    return [50, 100, 200];
   })();
 
   const getTeamName = (captainId: number) => {
