@@ -131,7 +131,7 @@ def send_welcome(to: str, name: str) -> None:
         "Welcome to Cricket Auction",
         _h2(f"Welcome, {name}! 🎉")
         + _p("You've successfully joined the Cricket Auction platform. Complete your player profile to get ready for the next auction.")
-        + _btn("Complete Your Profile", "http://localhost/onboarding")
+        + _btn("Complete Your Profile", f"{settings.SITE_URL}/onboarding")
         + _p("Once an organizer adds you to an event, you'll receive another email with the details.")
     )
     _send(to, "Welcome to Cricket Auction 🏏", html)
@@ -158,7 +158,7 @@ def send_event_invitation(
         _h2(f"You're in, {name}!")
         + _p(f"You've been added to <strong style='color:#f9fafb;'>{event_name}</strong> as <strong style='color:#f59e0b;'>{role_label}</strong>.")
         + _p(role_desc)
-        + _btn("View Event", f"http://localhost/dashboard")
+        + _btn("View Event", f"{settings.SITE_URL}/dashboard")
         + _p("Make sure your profile is complete before auction day. Good luck! 🏏"),
     )
     _send(to, f"You're invited to {event_name} as {role_label} 🏏", html)
@@ -173,10 +173,10 @@ def send_auction_starting(
 ) -> None:
     """Broadcast when auctioneer hits Start."""
     route_map = {
-        "auctioneer": f"http://localhost/auction/{event_id}/auctioneer",
-        "captain": f"http://localhost/auction/{event_id}/captain",
+        "auctioneer": f"{settings.SITE_URL}/auction/{event_id}/auctioneer",
+        "captain": f"{settings.SITE_URL}/auction/{event_id}/captain",
     }
-    url = route_map.get(role, f"http://localhost/auction/{event_id}/spectate")
+    url = route_map.get(role, f"{settings.SITE_URL}/auction/{event_id}/spectate")
     btn_label = {
         "auctioneer": "Open Control Panel",
         "captain": "Enter Bid Room",
@@ -206,7 +206,7 @@ def send_player_sold(
         _h2(f"Sold! 🔨 You won {player_name}")
         + _stat_row([("Player", player_name), ("Price", str(sold_price)), ("Team", team_name)])
         + _p(f"Congratulations {captain_name}! <strong style='color:#f9fafb;'>{player_name}</strong> is now part of your squad for <strong>{sold_price}</strong> credits.")
-        + _btn("View My Team", f"http://localhost/auction/{event_id}/captain"),
+        + _btn("View My Team", f"{settings.SITE_URL}/auction/{event_id}/captain"),
     )
     _send(to, f"You won {player_name} for {sold_price}! 🏏", html)
 
@@ -247,7 +247,7 @@ def send_magic_code(to: str, name: str, code: str) -> None:
 def send_organizer_invite(to: str, event_name: str, token: str, role: str) -> None:
     """Sent to someone who doesn't have an account yet — invite to join as organizer/auctioneer."""
     role_label = role.capitalize()
-    accept_url = f"http://localhost/accept-invite?token={token}"
+    accept_url = f"{settings.SITE_URL}/accept-invite?token={token}"
     html = _base_template(
         f"You're invited to {event_name}",
         _h2(f"You've been invited! 🎉")
@@ -397,7 +397,7 @@ def send_event_completion_summary(
         + f'<table width="100%" cellpadding="0" cellspacing="0">{unsold_rows}</table>'
         + unsold_more
         + "</div>"
-        + _btn("View Auction", f"http://localhost/auction/{event_id}/spectate")
+        + _btn("View Auction", f"{settings.SITE_URL}/auction/{event_id}/spectate")
     )
 
     html = _base_template(f"{event_name} — Completed Summary", body)

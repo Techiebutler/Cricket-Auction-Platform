@@ -8,10 +8,12 @@ COPY . .
 # Ensure public exists so COPY in runner stage never fails
 RUN mkdir -p public
 
-# Environment variables needed during build
-# They can be overridden at runtime since they're just defaults
-ENV NEXT_PUBLIC_API_URL=/api
-ENV NEXT_PUBLIC_WS_URL=ws://localhost/api/auction/ws
+# Build arguments for Next.js public env vars (embedded at build time)
+ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_WS_URL=wss://auction.techiebutler.com/api/auction/ws
+
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 
 RUN npm run build
 

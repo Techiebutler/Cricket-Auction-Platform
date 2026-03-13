@@ -108,13 +108,11 @@ services:
     build: 
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_WS_URL: wss://auction.techiebutler.com/api/auction/ws
     env_file:
       - .env.prod
-    environment:
-      # These should typically be the public URLs. 
-      # In production, relative paths work better for same-domain setups.
-      NEXT_PUBLIC_API_URL: /api
-      NEXT_PUBLIC_WS_URL: wss://${PUBLIC_DOMAIN}/api/auction/ws
     depends_on:
       - backend
       - traefik

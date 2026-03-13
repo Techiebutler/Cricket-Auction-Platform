@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24h
     UPLOAD_DIR: str = "/app/uploads"
+    
+    # Site URL for email links (no trailing slash)
+    SITE_URL: str = "http://localhost"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://auction:auction@db:5432/auction"
