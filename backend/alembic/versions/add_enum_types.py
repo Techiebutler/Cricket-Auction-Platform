@@ -23,19 +23,29 @@ def upgrade() -> None:
     auctionstatus.create(op.get_bind(), checkfirst=True)
     playerauctionstatus.create(op.get_bind(), checkfirst=True)
     
-    # Alter the columns to use the enum types
-    # First, we need to cast the existing varchar values to the enum type
+    # For auction_events.status:
+    # 1. Drop the default
+    # 2. Change the type
+    # 3. Re-add the default with enum type
+    op.execute("ALTER TABLE auction_events ALTER COLUMN status DROP DEFAULT")
     op.execute("""
         ALTER TABLE auction_events 
         ALTER COLUMN status TYPE auctionstatus 
         USING status::auctionstatus
     """)
+    op.execute("ALTER TABLE auction_events ALTER COLUMN status SET DEFAULT 'draft'::auctionstatus")
     
+    # For auction_players.status:
+    # 1. Drop the default
+    # 2. Change the type
+    # 3. Re-add the default with enum type
+    op.execute("ALTER TABLE auction_players ALTER COLUMN status DROP DEFAULT")
     op.execute("""
         ALTER TABLE auction_players 
         ALTER COLUMN status TYPE playerauctionstatus 
         USING status::playerauctionstatus
     """)
+    op.execute("ALTER TABLE auction_players ALTER COLUMN status SET DEFAULT 'pending'::playerauctionstatus")
 
 
 def downgrade() -> None:
