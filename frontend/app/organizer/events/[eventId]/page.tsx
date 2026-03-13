@@ -39,6 +39,8 @@ interface EventDetail {
   status: string;
   auctioneer_id: number | null;
   scheduled_at: string | null;
+  team_budget: number;
+  team_max_players: number;
 }
 
 interface Readiness {
@@ -163,10 +165,11 @@ function TeamsTab({
   eventId: number;
   teams: Team[];
   eligiblePlayers: User[];
-  teamForm: { name: string; color: string; budget: string; max_players: string };
-  setTeamForm: (f: { name: string; color: string; budget: string; max_players: string }) => void;
+  teamForm: { name: string; color: string; budget?: string; max_players?: string };
+  setTeamForm: (f: { name: string; color: string; budget?: string; max_players?: string }) => void;
   onCreateTeam: (e: React.FormEvent) => void;
   onAssignCaptain: (teamId: number, captainId: string) => void;
+  editable: boolean;
 }) {
   const [showForm, setShowForm] = useState(editable && teams.length === 0);
   const playerMap = Object.fromEntries(eligiblePlayers.map((p) => [p.id, p]));
@@ -178,33 +181,6 @@ function TeamsTab({
 
   return (
     <div className="space-y-4">
-      {/* Common budget / max players for all teams */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">Budget (credits) — applies to all teams</label>
-          <input
-            className={`input ${!editable ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
-            type="number"
-            min={100}
-            value={teamForm.budget}
-            onChange={(e) => editable && setTeamForm({ ...teamForm, budget: e.target.value })}
-            disabled={!editable}
-          />
-        </div>
-        <div>
-          <label className="label">Max Players per team</label>
-          <input
-            className={`input ${!editable ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
-            type="number"
-            min={1}
-            max={25}
-            value={teamForm.max_players}
-            onChange={(e) => editable && setTeamForm({ ...teamForm, max_players: e.target.value })}
-            disabled={!editable}
-          />
-        </div>
-      </div>
-
       {/* Existing teams */}
       {teams.length > 0 && (
         <div className="space-y-3">
@@ -342,6 +318,14 @@ function isValidEmail(val: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 }
 
+function toLocalDatetimeValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function PlayersTab({
   eventId,
   eligiblePlayers,
@@ -351,6 +335,7 @@ function PlayersTab({
   onInvited,
   onToast,
   editable,
+  eventStatus,
 }: {
   eventId: number;
   eligiblePlayers: User[];
@@ -360,13 +345,27 @@ function PlayersTab({
   onInvited: () => void;
   onToast: (type: "ok" | "err", text: string) => void;
   editable: boolean;
+  eventStatus: string | undefined;
 }) {
   const [search, setSearch] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [displayCount, setDisplayCount] = useState(15);
+  const [filter, setFilter] = useState<"all" | "added" | "not_added">("all");
   const addedIds = new Set(auctionPlayers.map((ap) => ap.player_id));
 
-  const filtered = eligiblePlayers.filter(
+  // If the event is completed, only show the players who were actually added to the auction
+  let basePlayers = eventStatus === "completed" 
+    ? eligiblePlayers.filter((p) => addedIds.has(p.id))
+    : eligiblePlayers;
+
+  if (filter === "added") {
+    basePlayers = basePlayers.filter((p) => addedIds.has(p.id));
+  } else if (filter === "not_added") {
+    basePlayers = basePlayers.filter((p) => !addedIds.has(p.id));
+  }
+
+  const filtered = basePlayers.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.email.toLowerCase().includes(search.toLowerCase())
@@ -376,7 +375,7 @@ function PlayersTab({
   const notFound =
     search.length > 3 &&
     isValidEmail(search) &&
-    !eligiblePlayers.some((p) => p.email.toLowerCase() === search.toLowerCase());
+    !basePlayers.some((p) => p.email.toLowerCase() === search.toLowerCase());
 
   const sendInvite = async (email: string) => {
     setInviting(true);
@@ -395,15 +394,32 @@ function PlayersTab({
 
   return (
     <div className="space-y-4">
-      {/* Search + invite bar */}
-      <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</div>
-        <input
-          className="input pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or email — or type a full email to invite"
-        />
+      {/* Filters and Search */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</div>
+          <input
+            className="input pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email — or type a full email to invite"
+          />
+        </div>
+        
+        {eventStatus !== "completed" && (
+          <select 
+            className="input w-full sm:w-40 text-sm bg-gray-900"
+            value={filter}
+            onChange={(e) => {
+              setFilter(e.target.value as "all" | "added" | "not_added");
+              setDisplayCount(15);
+            }}
+          >
+            <option value="all">All Players</option>
+            <option value="added">Added ({auctionPlayers.length})</option>
+            <option value="not_added">Not Added ({eligiblePlayers.length - auctionPlayers.length})</option>
+          </select>
+        )}
       </div>
 
       {/* Invite unregistered email prompt */}
@@ -433,64 +449,76 @@ function PlayersTab({
           No players match &ldquo;{search}&rdquo;
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filtered.map((player) => {
-            const added = addedIds.has(player.id);
-            return (
-              <div
-                key={player.id}
-                className={`flex items-center gap-3 bg-gray-900 border rounded-xl p-3 transition-colors ${
-                  added ? "border-green-800/50" : "border-gray-800"
-                }`}
-              >
-                <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center">
-                  {player.profile_photo ? (
-                    <img src={player.profile_photo} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-lg">👤</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{player.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{player.email}</p>
-                  <div className="flex gap-2 text-xs text-gray-600 mt-0.5">
-                    <span>🏏 {player.batting_rating}</span>
-                    <span>🎯 {player.bowling_rating}</span>
-                    <span>🤸 {player.fielding_rating}</span>
-                  </div>
-                </div>
-                {added ? (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="badge-sold">Added ✓</span>
-                    {editable && (
-                      <button
-                        className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none"
-                        onClick={() => onRemove(player.id)}
-                        title="Remove from event"
-                      >
-                        ×
-                      </button>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.slice(0, displayCount).map((player) => {
+              const added = addedIds.has(player.id);
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-3 bg-gray-900 border rounded-xl p-3 transition-colors ${
+                    added ? "border-green-800/50" : "border-gray-800"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center">
+                    {player.profile_photo ? (
+                      <img src={player.profile_photo} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-lg">👤</span>
                     )}
                   </div>
-                ) : editable ? (
-                  <button
-                    className="btn-primary text-xs px-3 py-1.5 shrink-0"
-                    onClick={() => onAdd(player.id)}
-                  >
-                    Add
-                  </button>
-                ) : (
-                  <span className="text-xs text-gray-600">Locked</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{player.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{player.email}</p>
+                    <div className="flex gap-2 text-xs text-gray-600 mt-0.5">
+                      <span>🏏 {player.batting_rating}</span>
+                      <span>🎯 {player.bowling_rating}</span>
+                      <span>🤸 {player.fielding_rating}</span>
+                    </div>
+                  </div>
+                  {added ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="badge-sold">Added ✓</span>
+                      {editable && (
+                        <button
+                          className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none"
+                          onClick={() => onRemove(player.id)}
+                          title="Remove from event"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ) : editable ? (
+                    <button
+                      className="btn-primary text-xs px-3 py-1.5 shrink-0"
+                      onClick={() => onAdd(player.id)}
+                    >
+                      Add
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-600">Locked</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {displayCount < filtered.length && (
+            <div className="text-center mt-6">
+              <button 
+                className="btn-secondary text-sm px-6 py-2"
+                onClick={() => setDisplayCount(v => v + 15)}
+              >
+                Load More ({filtered.length - displayCount} remaining)
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Summary footer */}
-      <p className="text-xs text-gray-600 text-right">
-        {auctionPlayers.length} of {eligiblePlayers.length} eligible players added
+      <p className="text-xs text-gray-600 text-right mt-4">
+        {auctionPlayers.length} of {basePlayers.length} eligible players added
       </p>
     </div>
   );
@@ -509,11 +537,12 @@ export default function OrganizerEventDetailPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [tab, setTab] = useState<"players" | "teams" | "auctioneer">("players");
-  const [teamForm, setTeamForm] = useState({ name: "", color: "#3B82F6", budget: "1000", max_players: "11" });
+  const [teamForm, setTeamForm] = useState({ name: "", color: "#3B82F6" });
+  const [settingsForm, setSettingsForm] = useState({ budget: "100000", max_players: "15" });
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [markingReady, setMarkingReady] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
-  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const showToast = (type: "ok" | "err", text: string) => {
     setToast({ type, text });
@@ -522,7 +551,7 @@ export default function OrganizerEventDetailPage() {
 
   const fetchAll = useCallback(async () => {
     const [evRes, eligible, aPlayers, teamsRes, readinessRes] = await Promise.all([
-      api.get(`/organizer/events/${eid}`).catch(() => null),
+      api.get(`/auction/events/${eid}`).catch(() => null),
       api.get(`/organizer/events/${eid}/eligible-players`),
       api.get(`/organizer/events/${eid}/players`),
       api.get(`/organizer/events/${eid}/teams`),
@@ -530,15 +559,11 @@ export default function OrganizerEventDetailPage() {
     ]);
     if (evRes) {
       setEvent(evRes.data);
-      if (evRes.data.scheduled_at) {
-        const d = new Date(evRes.data.scheduled_at);
-        const pad = (n: number) => String(n).padStart(2, "0");
-        setScheduleInput(
-          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
-        );
-      } else {
-        setScheduleInput("");
-      }
+      setScheduleInput(toLocalDatetimeValue(evRes.data.scheduled_at));
+      setSettingsForm({
+        budget: evRes.data.team_budget?.toString() || "100000",
+        max_players: evRes.data.team_max_players?.toString() || "15",
+      });
     }
     setEligiblePlayers(eligible.data);
     setAuctionPlayers(aPlayers.data);
@@ -549,14 +574,6 @@ export default function OrganizerEventDetailPage() {
   useEffect(() => {
     fetchAll().catch(() => router.push("/auth/login"));
   }, [eid, fetchAll]);
-
-  // Also fetch event info from the organizer events list
-  useEffect(() => {
-    api.get(`/organizer/events`).then(({ data }) => {
-      const found = data.find((e: EventDetail) => e.id === eid);
-      if (found) setEvent(found);
-    }).catch(() => {});
-  }, [eid]);
 
   const addPlayer = async (playerId: number) => {
     try {
@@ -584,10 +601,8 @@ export default function OrganizerEventDetailPage() {
       await api.post(`/organizer/events/${eid}/teams`, {
         name: teamForm.name,
         color: teamForm.color,
-        budget: parseInt(teamForm.budget),
-        max_players: parseInt(teamForm.max_players),
       });
-      setTeamForm({ name: "", color: "#3B82F6", budget: "1000", max_players: "11" });
+      setTeamForm({ name: "", color: "#3B82F6" });
       await fetchAll();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -626,19 +641,23 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
-  const saveSchedule = async () => {
-    setSavingSchedule(true);
+  const saveSettings = async () => {
+    setSavingSettings(true);
     try {
       const payload = {
         scheduled_at: scheduleInput ? new Date(scheduleInput).toISOString() : null,
+        team_budget: parseInt(settingsForm.budget),
+        team_max_players: parseInt(settingsForm.max_players),
       };
-      const { data } = await api.patch(`/organizer/events/${eid}/schedule`, payload);
+      const { data } = await api.patch(`/organizer/events/${eid}/settings`, payload);
       setEvent(data);
+      await fetchAll();
+      showToast("ok", "Settings saved successfully");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      showToast("err", msg || "Failed to update date");
+      showToast("err", msg || "Failed to update settings");
     } finally {
-      setSavingSchedule(false);
+      setSavingSettings(false);
     }
   };
 
@@ -670,11 +689,12 @@ export default function OrganizerEventDetailPage() {
     { key: "players", label: "Players", count: auctionPlayers.length },
     { key: "teams", label: "Teams", count: teams.length },
     { key: "auctioneer", label: "Auctioneer", count: readiness?.auctioneer_id ? 1 : 0 },
+    { key: "settings", label: "Settings", count: 0 },
   ] as const;
 
   return (
     <div className="min-h-screen p-6 bg-gray-950">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -732,36 +752,6 @@ export default function OrganizerEventDetailPage() {
             )}
           </div>
         </div>
-
-        {/* Organizer schedule editor (only while in draft) */}
-        {event && isDraft && (
-          <div className="card mb-5">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">
-              Auction Schedule
-            </h2>
-            <p className="text-xs text-gray-500 mb-3">
-              Set or adjust the auction date and time. This is visible to all participants.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              <div className="flex-1">
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={scheduleInput}
-                  onChange={(e) => setScheduleInput(e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                className="btn-secondary sm:w-auto"
-                onClick={saveSchedule}
-                disabled={savingSchedule}
-              >
-                {savingSchedule ? "Saving..." : "Save Date"}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Toast */}
         {toast && (
@@ -835,6 +825,7 @@ export default function OrganizerEventDetailPage() {
                 onInvited={fetchAll}
                 onToast={showToast}
                 editable={isDraft}
+                eventStatus={event?.status}
               />
             )}
 
@@ -868,6 +859,8 @@ export default function OrganizerEventDetailPage() {
                     label="Auctioneer"
                     currentUserId={readiness?.auctioneer_id}
                     inviteEndpoint={`/organizer/events/${eid}/invite-auctioneer`}
+                    searchEndpoint="/organizer/users/search"
+                    userEndpoint="/organizer/users"
                     onAssigned={async () => { await fetchAll(); showToast("ok", "Auctioneer assigned!"); }}
                   />
                 </div>
@@ -876,6 +869,90 @@ export default function OrganizerEventDetailPage() {
                     Unpublish the event to change the auctioneer.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Settings tab */}
+            {tab === "settings" && (
+              <div className="space-y-5">
+                <div className="card">
+                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                    Event Settings
+                  </h3>
+
+                  <div className="space-y-6">
+                    {/* Schedule */}
+                    <div>
+                      <label className="label text-gray-300 mb-1 block">Auction Schedule</label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Set or adjust the auction date and time. This will be visible to all participants.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                        <input
+                          type="datetime-local"
+                          className={`input max-w-sm ${!isDraft ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
+                          value={scheduleInput}
+                          onChange={(e) => setScheduleInput(e.target.value)}
+                          disabled={!isDraft}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-gray-800 w-full"></div>
+
+                    {/* Budget & Max Players */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                        <label className="label text-gray-300 mb-1 block">Team Budget (credits)</label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Total amount each team has to spend.
+                        </p>
+                        <input
+                          className={`input max-w-sm ${!isDraft ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
+                          type="number"
+                          min={100}
+                          value={settingsForm.budget}
+                          onChange={(e) => isDraft && setSettingsForm({ ...settingsForm, budget: e.target.value })}
+                          disabled={!isDraft}
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-gray-300 mb-1 block">Max Players per Team</label>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Maximum number of players a team can buy.
+                        </p>
+                        <input
+                          className={`input max-w-sm ${!isDraft ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
+                          type="number"
+                          min={1}
+                          max={25}
+                          value={settingsForm.max_players}
+                          onChange={(e) => isDraft && setSettingsForm({ ...settingsForm, max_players: e.target.value })}
+                          disabled={!isDraft}
+                        />
+                      </div>
+                    </div>
+
+                    {isDraft && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={saveSettings}
+                          disabled={savingSettings}
+                        >
+                          {savingSettings ? "Saving..." : "Save Settings"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {!isDraft && (
+                    <p className="text-[11px] text-gray-500 mt-4 pt-4 border-t border-gray-800">
+                      Unpublish the event to adjust settings.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

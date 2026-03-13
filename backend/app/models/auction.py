@@ -36,6 +36,10 @@ class AuctionEvent(Base):
     status: Mapped[AuctionStatus] = mapped_column(Enum(AuctionStatus), default=AuctionStatus.draft)
     allowed_domains: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Global budget and max players per team
+    team_budget: Mapped[int] = mapped_column(Integer, default=100000)
+    team_max_players: Mapped[int] = mapped_column(Integer, default=15)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

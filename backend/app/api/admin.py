@@ -78,6 +78,9 @@ async def update_event(
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+        
+    if event.status == AuctionStatus.completed:
+        raise HTTPException(status_code=400, detail="Cannot edit a completed event")
 
     if payload.name is not None:
         event.name = payload.name

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuctionStore, PlayerState } from "@/store/auction";
 import { AuctionSocket } from "@/lib/ws";
@@ -9,6 +9,7 @@ import AuctionPlayerCard from "@/components/AuctionPlayerCard";
 import TeamSummary from "@/components/TeamSummary";
 
 export default function AuctioneerPage() {
+  const router = useRouter();
   const { eventId } = useParams<{ eventId: string }>();
   const eid = parseInt(eventId);
   const store = useAuctionStore();
@@ -50,22 +51,23 @@ export default function AuctioneerPage() {
         store.setActivePlayer(msg.auction_player_id as number, msg.base_price as number);
       if (msg.type === "auction_paused") setStatus("paused");
       if (msg.type === "auction_resumed") setStatus("active");
+      if (msg.type === "auction_completed") setStatus("completed");
     });
 
     setSocket(ws);
     return () => ws.disconnect();
   }, [eid]);
 
-  // Fetch player names for display
+  // Fetch player names for display (only players in this event)
   useEffect(() => {
     const fetchNames = async () => {
-      const { data: users } = await api.get("/admin/users").catch(() => ({ data: [] }));
+      const { data } = await api.get(`/auction/events/${eid}/players-info`).catch(() => ({ data: [] }));
       const map: Record<number, string> = {};
-      users.forEach((u: { id: number; name: string }) => { map[u.id] = u.name; });
+      data.forEach((row: { player_id: number; name: string }) => { map[row.player_id] = row.name; });
       setPlayerNames(map);
     };
     fetchNames();
-  }, []);
+  }, [eid]);
 
   const activeAP = store.players.find((p) => p.id === store.activePlayerId);
   const pendingPlayers = store.players.filter((p) => p.status === "pending");
@@ -79,6 +81,22 @@ export default function AuctioneerPage() {
 
   const startAuction = () => api.post(`/auction/events/${eid}/start`).then(syncState);
   const pauseAuction = () => api.post(`/auction/events/${eid}/pause`).then(syncState);
+  
+  const finishAuction = async () => {
+    if (pendingPlayers.length > 0) {
+      alert("Cannot finish auction while players are still pending.");
+      return;
+    }
+    if (confirm("Are you sure you want to finish the auction? This will mark the event as completed and no further changes can be made.")) {
+      try {
+        await api.post(`/auction/events/${eid}/finish`);
+        await syncState();
+      } catch (e: any) {
+        alert(e.response?.data?.detail || "Error finishing auction");
+      }
+    }
+  };
+
   const nextPlayer = (playerId?: number) =>
     api.post(`/auction/events/${eid}/next-player`, { player_id: playerId || null }).catch((e) =>
       alert(e.response?.data?.detail || "Error")
@@ -88,10 +106,23 @@ export default function AuctioneerPage() {
   return (
     <div className="min-h-screen p-6 bg-gray-950">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-start mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Auctioneer Panel</h1>
-            {scheduledDate && (
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-gray-500 hover:text-white flex items-center gap-2 text-sm mb-3 transition-colors"
+            >
+              <span>←</span> Exit to Dashboard
+            </button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">Auctioneer Panel</h1>
+              {status === "completed" && (
+                <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-1 rounded">
+                  COMPLETED
+                </span>
+              )}
+            </div>
+            {scheduledDate && status !== "completed" && (
               <p className="text-xs text-gray-500 mt-1">
                 Scheduled for{" "}
                 {scheduledDate.toLocaleString("en-IN", {
@@ -104,35 +135,60 @@ export default function AuctioneerPage() {
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-1">
-            {status !== "active" && (
-              <button
-                className={`btn-primary ${!canStart ? "opacity-50 cursor-not-allowed" : ""}`}
-                onClick={startAuction}
-                disabled={!canStart}
-              >
-                {status === "paused" ? "▶ Resume" : "▶ Start Auction"}
-              </button>
-            )}
-            {!canStart && scheduledDate && (
-              <p className="text-[11px] text-gray-500">
-                Start button unlocks at the scheduled time.
-              </p>
-            )}
-            {status === "active" && (
-              <>
-                <button className="btn-danger" onClick={pauseAuction}>⏸ Pause</button>
-                <button className="btn-secondary" onClick={() => nextPlayer()}>
-                  ⏭ Random Next
-                </button>
-                {activeAP && (
-                  <button className="btn-primary" onClick={hammer}>
-                    🔨 Hammer
+          
+          {status !== "completed" && (
+            <div className="flex items-center gap-2">
+              {status !== "active" && (
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`btn-primary ${!canStart ? "opacity-50 cursor-not-allowed" : ""}`}
+                      onClick={startAuction}
+                      disabled={!canStart}
+                    >
+                      {status === "paused" ? "▶ Resume Auction" : "▶ Start Auction"}
+                    </button>
+                    {status === "paused" && (
+                       <button
+                         className={`btn-secondary border-red-500/30 text-red-400 hover:bg-red-500/10 ${pendingPlayers.length > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                         onClick={finishAuction}
+                         disabled={pendingPlayers.length > 0}
+                         title={pendingPlayers.length > 0 ? "Must auction all players before finishing" : ""}
+                       >
+                         🏁 Finish Auction
+                       </button>
+                    )}
+                  </div>
+                  {!canStart && scheduledDate && (
+                    <p className="text-[11px] text-gray-500">
+                      Start button unlocks at the scheduled time.
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {status === "active" && (
+                <>
+                  <button className="btn-danger" onClick={pauseAuction}>
+                    ⏸ Adjourn (Pause)
                   </button>
-                )}
-              </>
-            )}
-          </div>
+                  <button className="btn-secondary" onClick={() => nextPlayer()}>
+                    ⏭ Random Next
+                  </button>
+                  {activeAP && (
+                    <button className="btn-primary" onClick={hammer}>
+                      🔨 Hammer
+                    </button>
+                  )}
+                  {pendingPlayers.length === 0 && !activeAP && (
+                    <button className="btn-secondary border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={finishAuction}>
+                      🏁 Finish Auction
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -181,13 +237,15 @@ export default function AuctioneerPage() {
                     className="flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2"
                   >
                     <span className="text-sm">{playerNames[p.player_id] || `#${p.player_id}`}</span>
-                    <button
-                      className="text-xs btn-secondary py-1 px-2"
-                      onClick={() => nextPlayer(p.id)}
-                      disabled={status !== "active"}
-                    >
-                      Pick
-                    </button>
+                    {status !== "completed" && (
+                      <button
+                        className="text-xs btn-secondary py-1 px-2"
+                        onClick={() => nextPlayer(p.id)}
+                        disabled={status !== "active"}
+                      >
+                        Pick
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -215,7 +273,18 @@ export default function AuctioneerPage() {
                 {unsoldPlayers.map((p) => (
                   <div key={p.id} className="flex items-center justify-between bg-gray-900 rounded px-3 py-1.5">
                     <span className="text-sm">{playerNames[p.player_id] || `#${p.player_id}`}</span>
-                    <span className="badge-unsold">Unsold</span>
+                    <div className="flex items-center gap-2">
+                      <span className="badge-unsold">Unsold</span>
+                      {status !== "completed" && (
+                        <button
+                          className="text-xs btn-secondary py-1 px-2"
+                          onClick={() => nextPlayer(p.id)}
+                          disabled={status !== "active"}
+                        >
+                          Re-auction
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

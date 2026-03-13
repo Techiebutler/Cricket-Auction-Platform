@@ -2,10 +2,10 @@ import secrets
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.core.database import get_db
 from app.core.deps import require_role
@@ -35,8 +35,10 @@ class PlayerInvitePayload(BaseModel):
     email: EmailStr
 
 
-class ScheduleUpdatePayload(BaseModel):
-    scheduled_at: datetime | None
+class EventSettingsUpdatePayload(BaseModel):
+    scheduled_at: datetime | None = None
+    team_budget: int | None = None
+    team_max_players: int | None = None
 
 router = APIRouter(prefix="/organizer", tags=["organizer"])
 
@@ -49,6 +51,36 @@ async def _get_event_for_organizer(event_id: int, organizer: User, db: AsyncSess
     if event.organizer_id != organizer.id:
         raise HTTPException(status_code=403, detail="Not your event")
     return event
+
+
+@router.get("/users/search", response_model=list[UserOut])
+async def search_users(
+    q: str = Query(..., min_length=1),
+    current_user: User = Depends(require_role(ROLE_ORGANIZER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Search users by name or email — used by the invite widget for organizers."""
+    pattern = f"%{q}%"
+    result = await db.execute(
+        select(User).where(
+            or_(User.name.ilike(pattern), User.email.ilike(pattern))
+        ).limit(8)
+    )
+    return [UserOut.model_validate(u) for u in result.scalars().all()]
+
+
+@router.get("/users/{user_id}", response_model=UserOut)
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(require_role(ROLE_ORGANIZER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single user by ID"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserOut.model_validate(user)
 
 
 @router.get("/events", response_model=list[AuctionEventOut])
@@ -174,8 +206,8 @@ async def create_team(
         event_id=event_id,
         name=payload.name,
         color=payload.color,
-        budget=payload.budget,
-        max_players=payload.max_players,
+        budget=event.team_budget,
+        max_players=event.team_max_players,
     )
     db.add(team)
     await db.commit()
@@ -289,20 +321,36 @@ async def invite_auctioneer(
         }
 
 
-@router.patch("/events/{event_id}/schedule", response_model=AuctionEventOut)
-async def update_schedule(
+@router.patch("/events/{event_id}/settings", response_model=AuctionEventOut)
+async def update_settings(
     event_id: int,
-    payload: ScheduleUpdatePayload,
+    payload: EventSettingsUpdatePayload,
     current_user: User = Depends(require_role(ROLE_ORGANIZER)),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Allow organizer to adjust the auction date/time for their event.
+    Allow organizer to adjust the auction date/time, global budget, and max players for their event.
     """
     event = await _get_event_for_organizer(event_id, current_user, db)
     if event.status != AuctionStatus.draft:
-        raise HTTPException(status_code=400, detail="Cannot change schedule after event is published")
-    event.scheduled_at = payload.scheduled_at
+        raise HTTPException(status_code=400, detail="Cannot change settings after event is published")
+    if payload.scheduled_at is not None:
+        event.scheduled_at = payload.scheduled_at
+    if payload.team_budget is not None:
+        event.team_budget = payload.team_budget
+    if payload.team_max_players is not None:
+        event.team_max_players = payload.team_max_players
+
+    # Also update all existing teams in this event
+    if payload.team_budget is not None or payload.team_max_players is not None:
+        teams_result = await db.execute(select(Team).where(Team.event_id == event_id))
+        teams = teams_result.scalars().all()
+        for t in teams:
+            if payload.team_budget is not None:
+                t.budget = payload.team_budget
+            if payload.team_max_players is not None:
+                t.max_players = payload.team_max_players
+
     await db.commit()
     await db.refresh(event)
     return AuctionEventOut.model_validate(event)

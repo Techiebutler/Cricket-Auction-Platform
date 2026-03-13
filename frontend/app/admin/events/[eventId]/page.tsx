@@ -82,6 +82,8 @@ export default function AdminEventDetailPage() {
     }
   };
 
+  const isCompleted = event?.status === "completed";
+
   return (
     <div className="min-h-screen p-8 bg-gray-950">
       <div className="max-w-2xl mx-auto">
@@ -109,15 +111,18 @@ export default function AdminEventDetailPage() {
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
               Organizer
             </h2>
-            <UserSearchInvite
-              eventId={eid}
-              role="organizer"
-              label="Assign or invite organizer"
-              currentUserId={event?.organizer_id}
-              onAssigned={(user) => {
-                if (user) setEvent((e) => e ? { ...e, organizer_id: user.id } : e);
-              }}
-            />
+            <div className={isCompleted ? "opacity-50 pointer-events-none" : ""}>
+              <UserSearchInvite
+                eventId={eid}
+                role="organizer"
+                label="Assign or invite organizer"
+                currentUserId={event?.organizer_id}
+                onAssigned={(user) => {
+                  if (user) setEvent((e) => e ? { ...e, organizer_id: user.id } : e);
+                }}
+              />
+            </div>
+            {isCompleted && <p className="text-[11px] text-gray-500 mt-2">Cannot change organizer for completed events.</p>}
           </div>
 
           {/* Schedule */}
@@ -131,9 +136,10 @@ export default function AdminEventDetailPage() {
             </p>
             <input
               type="datetime-local"
-              className="input mb-3"
+              className={`input mb-3 ${isCompleted ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
+              disabled={isCompleted}
             />
             {scheduledAt && (
               <p className="text-xs text-amber-400/80 mb-3">
@@ -143,9 +149,11 @@ export default function AdminEventDetailPage() {
                 })}
               </p>
             )}
-            <button className="btn-primary" onClick={saveSchedule} disabled={scheduleSaving}>
-              {scheduleSaving ? "Saving..." : "Save Schedule"}
-            </button>
+            {!isCompleted && (
+              <button className="btn-primary" onClick={saveSchedule} disabled={scheduleSaving}>
+                {scheduleSaving ? "Saving..." : "Save Schedule"}
+              </button>
+            )}
           </div>
 
           {/* Allowed domains */}
@@ -158,14 +166,17 @@ export default function AdminEventDetailPage() {
               Leave blank to allow all users.
             </p>
             <input
-              className="input mb-3"
+              className={`input mb-3 ${isCompleted ? "bg-gray-900 text-gray-500 cursor-not-allowed" : ""}`}
               value={domains}
               onChange={(e) => setDomains(e.target.value)}
               placeholder="techiebutler.com, saasflash.ai"
+              disabled={isCompleted}
             />
-            <button className="btn-primary" onClick={saveDomains} disabled={saving}>
-              {saving ? "Saving..." : "Save Domains"}
-            </button>
+            {!isCompleted && (
+              <button className="btn-primary" onClick={saveDomains} disabled={saving}>
+                {saving ? "Saving..." : "Save Domains"}
+              </button>
+            )}
           </div>
         </div>
       </div>

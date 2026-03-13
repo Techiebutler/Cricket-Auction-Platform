@@ -157,6 +157,39 @@ async def pause_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     return event
 
 
+async def finish_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
+    result = await db.execute(select(AuctionEvent).where(AuctionEvent.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event or event.status not in (AuctionStatus.active, AuctionStatus.paused):
+        raise ValueError("Auction must be active or paused to finish")
+
+    # Stop timer if any
+    task = _timer_tasks.pop(event_id, None)
+    if task:
+        task.cancel()
+
+    redis = await get_redis()
+    await redis.delete(_timer_key(event_id))
+    await redis.delete(_active_key(event_id))
+
+    # Mark active players as unsold
+    active_players_res = await db.execute(
+        select(AuctionPlayer).where(
+            AuctionPlayer.event_id == event_id,
+            AuctionPlayer.status == PlayerAuctionStatus.active
+        )
+    )
+    for ap in active_players_res.scalars().all():
+        ap.status = PlayerAuctionStatus.unsold
+
+    event.status = AuctionStatus.completed
+    await db.commit()
+    await db.refresh(event)
+
+    await manager.broadcast(event_id, {"type": "auction_completed", "event_id": event_id})
+    return event
+
+
 async def set_next_player(
     event_id: int,
     player_id: Optional[int],
@@ -189,7 +222,8 @@ async def set_next_player(
         ap = result.scalar_one_or_none()
         if not ap:
             raise ValueError("Player not found in event")
-        if ap.status != PlayerAuctionStatus.pending:
+        # Allow re-auctioning unsold players
+        if ap.status not in (PlayerAuctionStatus.pending, PlayerAuctionStatus.unsold):
             raise ValueError("Player already auctioned")
 
     ap.status = PlayerAuctionStatus.active

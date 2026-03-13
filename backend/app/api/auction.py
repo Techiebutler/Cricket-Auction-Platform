@@ -145,6 +145,19 @@ async def pause_auction(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/events/{event_id}/finish", response_model=AuctionEventOut)
+async def finish_auction(
+    event_id: int,
+    current_user: User = Depends(require_role(ROLE_AUCTIONEER)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        event = await auction_service.finish_auction(event_id, db)
+        return AuctionEventOut.model_validate(event)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/events/{event_id}/next-player", response_model=AuctionPlayerOut)
 async def next_player(
     event_id: int,

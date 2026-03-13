@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuctionStore } from "@/store/auction";
 import { useAuthStore } from "@/store/auth";
@@ -24,6 +24,7 @@ interface EventMeta {
 }
 
 export default function CaptainPage() {
+  const router = useRouter();
   const { eventId } = useParams<{ eventId: string }>();
   const eid = parseInt(eventId);
   const store = useAuctionStore();
@@ -95,6 +96,9 @@ export default function CaptainPage() {
       if (msg.type === "auction_paused") {
         store.setFullState({ status: "paused" });
       }
+      if (msg.type === "auction_completed") {
+        store.setFullState({ status: "completed" });
+      }
     });
 
     api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
@@ -140,12 +144,25 @@ export default function CaptainPage() {
   return (
     <div className="min-h-screen p-6 bg-gray-950">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-start mb-6">
           <div>
-            <h1 className="text-2xl font-bold">
-              {myTeam ? myTeam.name : "Captain View"}
-            </h1>
-            {eventMeta?.scheduled_at && (
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-gray-500 hover:text-white flex items-center gap-2 text-sm mb-3 transition-colors"
+            >
+              <span>←</span> Exit to Dashboard
+            </button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">
+                {myTeam ? myTeam.name : "Captain View"}
+              </h1>
+              {store.status === "completed" && (
+                <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-1 rounded">
+                  COMPLETED
+                </span>
+              )}
+            </div>
+            {eventMeta?.scheduled_at && store.status !== "completed" && (
               <p className="text-xs text-gray-500 mt-1">
                 Auction:&nbsp;
                 {new Date(eventMeta.scheduled_at).toLocaleString("en-IN", {

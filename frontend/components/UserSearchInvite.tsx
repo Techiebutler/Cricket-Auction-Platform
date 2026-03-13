@@ -19,13 +19,17 @@ interface Props {
   onAssigned: (user: User | null, status: "assigned" | "invited") => void;
   /** Override the POST endpoint for the invite/assign action */
   inviteEndpoint?: string;
+  /** Override the GET endpoint for searching users */
+  searchEndpoint?: string;
+  /** Override the GET endpoint for fetching the current user */
+  userEndpoint?: string;
 }
 
 function isValidEmail(val: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 }
 
-export default function UserSearchInvite({ eventId, role, label, currentUserId, onAssigned, inviteEndpoint }: Props) {
+export default function UserSearchInvite({ eventId, role, label, currentUserId, onAssigned, inviteEndpoint, searchEndpoint, userEndpoint }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
@@ -39,11 +43,19 @@ export default function UserSearchInvite({ eventId, role, label, currentUserId, 
   // Load current assigned user on mount
   useEffect(() => {
     if (!currentUserId) return;
-    api.get(`/admin/users`).then(({ data }) => {
-      const u = data.find((u: User) => u.id === currentUserId);
-      if (u) { setSelected(u); setQuery(u.name); }
-    }).catch(() => {});
-  }, [currentUserId]);
+    const endpoint = userEndpoint ? `${userEndpoint}/${currentUserId}` : `/admin/users`;
+    if (userEndpoint) {
+      api.get(endpoint).then(({ data }) => {
+        if (data) { setSelected(data); setQuery(data.name); }
+      }).catch(() => {});
+    } else {
+      // Fallback for admin using the list endpoint
+      api.get(endpoint).then(({ data }) => {
+        const u = data.find((u: User) => u.id === currentUserId);
+        if (u) { setSelected(u); setQuery(u.name); }
+      }).catch(() => {});
+    }
+  }, [currentUserId, userEndpoint]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -64,7 +76,8 @@ export default function UserSearchInvite({ eventId, role, label, currentUserId, 
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const { data } = await api.get(`/admin/users/search?q=${encodeURIComponent(val)}`);
+        const endpoint = searchEndpoint ? `${searchEndpoint}?q=${encodeURIComponent(val)}` : `/admin/users/search?q=${encodeURIComponent(val)}`;
+        const { data } = await api.get(endpoint);
         setResults(data);
         setOpen(true);
       } catch {}
@@ -125,7 +138,7 @@ export default function UserSearchInvite({ eventId, role, label, currentUserId, 
             <p className="text-xs text-gray-500 truncate">{selected.email}</p>
           </div>
           <div className="flex items-center gap-2">
-            {!selected.roles.includes(role) && (
+            {currentUserId !== selected.id && (
               <button
                 className="btn-primary text-xs py-1 px-3"
                 disabled={inviting}
@@ -134,7 +147,7 @@ export default function UserSearchInvite({ eventId, role, label, currentUserId, 
                 {inviting ? "..." : "Assign"}
               </button>
             )}
-            {selected.roles.includes(role) && (
+            {currentUserId === selected.id && (
               <span className="text-xs text-green-400 font-medium">✓ Assigned</span>
             )}
             <button

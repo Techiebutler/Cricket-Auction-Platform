@@ -20,6 +20,8 @@ class AuctionEventUpdate(BaseModel):
     auctioneer_id: Optional[int] = None
     allowed_domains: Optional[list[str]] = None
     scheduled_at: Optional[datetime] = None
+    team_budget: Optional[int] = None
+    team_max_players: Optional[int] = None
 
 
 class AuctionEventOut(BaseModel):
@@ -32,6 +34,8 @@ class AuctionEventOut(BaseModel):
     status: AuctionStatus
     allowed_domains: list[str]
     scheduled_at: Optional[datetime]
+    team_budget: int
+    team_max_players: int
     created_at: datetime
 
     model_config = {"from_attributes": True}
