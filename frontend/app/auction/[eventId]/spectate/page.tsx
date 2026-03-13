@@ -327,7 +327,7 @@ export default function SpectatePage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main stage */}
-        <div className="flex-1 flex flex-col items-center justify-center p-10">
+        <div className="flex-1 flex flex-col items-center justify-center p-10 overflow-y-auto">
           {displayAP ? (
             <div className="text-center max-w-2xl w-full">
               {/* Timer */}
@@ -421,7 +421,7 @@ export default function SpectatePage() {
               )}
             </div>
           ) : (
-            <div className="text-center max-w-lg w-full">
+            <div className="text-center max-w-lg w-full mx-auto text-center">
               {store.status === "completed" ? (
                 <div className="w-full max-w-4xl text-left">
                   <div className="text-center mb-6">
