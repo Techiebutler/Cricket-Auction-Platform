@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.core.redis import get_redis
 from app.models.user import User, ROLE_ADMIN, ROLE_ORGANIZER, ROLE_AUCTIONEER
-from app.models.auction import AuctionEvent
+from app.models.auction import AuctionEvent, AuctionStatus
 from app.schemas.auction import AuctionEventCreate, AuctionEventUpdate, AuctionEventOut
 from app.schemas.user import UserOut, AssignRolePayload
 from app.services import email_service
