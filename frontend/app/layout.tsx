@@ -4,7 +4,7 @@ import faviconPng from "@/asset/Favi PNG.png";
 
 export const metadata: Metadata = {
   title: "Cricket Auction",
-  description: "IPL-style cricket auction platform",
+  description: "Platform for tbpl auction, coz we're fcking devs",
   icons: {
     icon: [{ url: faviconPng.src, type: "image/png" }],
     shortcut: [{ url: faviconPng.src, type: "image/png" }],
