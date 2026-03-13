@@ -87,8 +87,8 @@ export default function DashboardPage() {
     });
   };
 
-  // Filter completed events from "Upcoming Events" tab, show all in "My Events"
-  const filteredAllEvents = allEvents.filter((e) => e.status !== "completed");
+  // Filter draft and completed events from "Upcoming Events" tab (only show ready/active/paused)
+  const filteredAllEvents = allEvents.filter((e) => e.status !== "completed" && e.status !== "draft");
   
   // If activePanel is "captain", filter to only show events where user is captain
   const getFilteredMyEvents = () => {
