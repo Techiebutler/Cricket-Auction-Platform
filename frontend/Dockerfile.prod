@@ -5,6 +5,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+# Ensure public exists so COPY in runner stage never fails
+RUN mkdir -p public
 
 # Environment variables needed during build
 # They can be overridden at runtime since they're just defaults
