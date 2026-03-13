@@ -270,7 +270,23 @@ async def websocket_endpoint(event_id: int, websocket: WebSocket, token: str = "
 
 
 @router.get("/events/{event_id}/viewer-stats")
-async def get_viewer_stats(event_id: int):
-    """Get live and total unique viewer counts for an event."""
+async def get_viewer_stats(event_id: int, db: AsyncSession = Depends(get_db)):
+    """Get live and total unique viewer counts for an event.
+    For completed events, returns persisted count from database.
+    """
+    # Check if event is completed - use persisted DB count
+    result = await db.execute(
+        select(AuctionEvent).where(AuctionEvent.id == event_id)
+    )
+    event = result.scalar_one_or_none()
+    
+    if event and event.status == AuctionStatus.completed:
+        # Return persisted count for completed events
+        return {
+            "live_viewers": 0,
+            "total_unique_viewers": event.total_viewers or 0,
+        }
+    
+    # For active/non-completed events, get from Redis
     stats = await manager.get_viewer_stats(event_id)
     return stats

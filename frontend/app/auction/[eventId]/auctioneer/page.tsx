@@ -93,6 +93,13 @@ export default function AuctioneerPage() {
   useEffect(() => {
     if (!hasAccess) return;
     syncState();
+  }, [eid, hasAccess, syncState]);
+
+  // Only connect WebSocket for non-completed events
+  useEffect(() => {
+    if (!hasAccess) return;
+    // Don't connect WebSocket for completed events
+    if (status === "completed") return;
 
     const token = localStorage.getItem("token") || "";
     const ws = new AuctionSocket(eid, token);
@@ -116,7 +123,7 @@ export default function AuctioneerPage() {
 
     setSocket(ws);
     return () => ws.disconnect();
-  }, [eid, hasAccess]);
+  }, [eid, hasAccess, status]);
 
   // Fetch player names for display (only players in this event)
   useEffect(() => {

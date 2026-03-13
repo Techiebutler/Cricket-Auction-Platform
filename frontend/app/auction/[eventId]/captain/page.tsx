@@ -167,6 +167,28 @@ export default function CaptainPage() {
     if (!hasAccess) return;
     syncState();
 
+    // Fetch player names regardless of event status
+    api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
+      const nameMap: Record<number, string> = {};
+      const photoMap: Record<number, string> = {};
+      data.forEach((row: { player_id: number; name: string; profile_photo?: string }) => {
+        nameMap[row.player_id] = row.name;
+        if (row.profile_photo) photoMap[row.player_id] = row.profile_photo;
+      });
+      setPlayerNames(nameMap);
+      setPlayerPhotos(photoMap);
+      setIsLoadingPlayers(false);
+    }).catch(() => {
+      setIsLoadingPlayers(false);
+    });
+  }, [eid, hasAccess, syncState]);
+
+  // Only connect WebSocket for non-completed events
+  useEffect(() => {
+    if (!hasAccess) return;
+    // Don't connect WebSocket for completed events
+    if (store.status === "completed") return;
+
     const token = localStorage.getItem("token") || "";
     const ws = new AuctionSocket(eid, token);
     ws.connect();
@@ -201,23 +223,9 @@ export default function CaptainPage() {
       if (msg.type === "viewer_count") setViewerCount(msg.count as number);
     });
 
-    api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
-      const nameMap: Record<number, string> = {};
-      const photoMap: Record<number, string> = {};
-      data.forEach((row: { player_id: number; name: string; profile_photo?: string }) => {
-        nameMap[row.player_id] = row.name;
-        if (row.profile_photo) photoMap[row.player_id] = row.profile_photo;
-      });
-      setPlayerNames(nameMap);
-      setPlayerPhotos(photoMap);
-      setIsLoadingPlayers(false);
-    }).catch(() => {
-      setIsLoadingPlayers(false);
-    });
-
     setSocket(ws);
     return () => ws.disconnect();
-  }, [eid, hasAccess]);
+  }, [eid, hasAccess, store.status, syncState]);
 
   useEffect(() => {
     if (!hasAccess || store.status !== "completed") {

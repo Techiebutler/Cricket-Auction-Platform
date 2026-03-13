@@ -101,6 +101,26 @@ export default function SpectatePage() {
   useEffect(() => {
     syncState();
 
+    // Fetch player names regardless of event status
+    api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
+      const names: Record<number, string> = {};
+      const photos: Record<number, string | null> = {};
+      data.forEach(
+        (row: { player_id: number; name: string; profile_photo: string | null }) => {
+          names[row.player_id] = row.name;
+          photos[row.player_id] = row.profile_photo;
+        }
+      );
+      setPlayerNames(names);
+      setPlayerPhotos(photos);
+    }).catch(() => {});
+  }, [eid]);
+
+  // Only connect WebSocket for non-completed events
+  useEffect(() => {
+    // Don't connect WebSocket for completed events
+    if (store.status === "completed") return;
+
     const token = localStorage.getItem("token") || "";
     const ws = new AuctionSocket(eid, token);
     ws.connect();
@@ -159,21 +179,8 @@ export default function SpectatePage() {
       }
     });
 
-    api.get(`/auction/events/${eid}/players-info`).then(({ data }) => {
-      const names: Record<number, string> = {};
-      const photos: Record<number, string | null> = {};
-      data.forEach(
-        (row: { player_id: number; name: string; profile_photo: string | null }) => {
-          names[row.player_id] = row.name;
-          photos[row.player_id] = row.profile_photo;
-        }
-      );
-      setPlayerNames(names);
-      setPlayerPhotos(photos);
-    }).catch(() => {});
-
     return () => ws.disconnect();
-  }, [eid]);
+  }, [eid, store.status]);
 
   const activeAP = store.players.find((p) => p.id === store.activePlayerId);
   const displayAP =
