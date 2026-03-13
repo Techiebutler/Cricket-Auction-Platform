@@ -365,7 +365,7 @@ export default function CaptainPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main area */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-6 overflow-scroll">
           {activeAP ? (
             <div className="max-w-2xl space-y-4">
               <AuctionPlayerCard
@@ -450,7 +450,7 @@ export default function CaptainPage() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full max-w-lg mx-auto text-center">
+            <div className="flex flex-col items-center justify-center max-w-lg mx-auto text-center">
               {store.status === "completed" ? (
                 <div className="w-full max-w-3xl text-left">
                   <div className="text-center mb-6">

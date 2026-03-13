@@ -330,7 +330,7 @@ export default function AuctioneerPage() {
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">
                 Pending ({pendingPlayers.length})
               </h3>
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar my-3 shadow-md shadow-black/40 rounded-lg">
                 {pendingPlayers.length === 0 ? (
                   <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-3 text-xs text-gray-500 text-center">
                     No pending players
@@ -380,7 +380,7 @@ export default function AuctioneerPage() {
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">
                 Sold ({soldPlayers.length})
               </h3>
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar my-3 shadow-md shadow-black/40 rounded-lg">
                 {soldPlayers.length === 0 ? (
                   <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-3 text-xs text-gray-500 text-center">
                     No sold players yet
@@ -422,7 +422,7 @@ export default function AuctioneerPage() {
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">
                 Unsold ({unsoldPlayers.length})
               </h3>
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar my-3 shadow-md shadow-black/40 rounded-lg">
                 {unsoldPlayers.length === 0 ? (
                   <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-3 text-xs text-gray-500 text-center">
                     No unsold players yet
