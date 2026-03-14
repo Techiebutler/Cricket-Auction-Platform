@@ -22,7 +22,7 @@ from app.core.queue import enqueue
 
 TIMER_KEY = "auction:{event_id}:timer"
 ACTIVE_PLAYER_KEY = "auction:{event_id}:active_player"
-TIMER_SECONDS = 60
+TIMER_SECONDS = 180
 
 # Track running timer tasks per event
 _timer_tasks: dict[int, asyncio.Task] = {}
