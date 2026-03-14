@@ -61,7 +61,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)):
     """Public registration — always creates a player account."""
-    existing = await db.execute(select(User).where(User.email == payload.email))
+    existing = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -89,7 +95,13 @@ async def godmode_register(payload: GodmodeRegister, db: AsyncSession = Depends(
     if payload.secret != settings.GODMODE_SECRET:
         raise HTTPException(status_code=403, detail="Invalid godmode secret")
 
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
 
     if user:
@@ -117,7 +129,11 @@ async def godmode_register(payload: GodmodeRegister, db: AsyncSession = Depends(
 @router.post("/login", response_model=TokenOut)
 async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(User).where(User.email == payload.email, User.deleted_at.is_(None))
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
     )
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
@@ -208,7 +224,13 @@ async def accept_invite(payload: InviteRegister, db: AsyncSession = Depends(get_
     event_id: int = invite["event_id"]
 
     # Find or create user
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(
+        select(User).where(
+            User.email == email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
 
     if user:
@@ -250,7 +272,13 @@ async def send_magic_code(payload: MagicCodeRequest, db: AsyncSession = Depends(
     Send a 6-digit one-time login code to the given email.
     Works for both registered and unregistered emails (unregistered get a hint to sign up).
     """
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         # Don't reveal whether the account exists — just say "if registered, you'll get a code"
@@ -272,7 +300,13 @@ async def verify_magic_code(payload: MagicCodeVerify, db: AsyncSession = Depends
     if not stored or stored != payload.code.strip():
         raise HTTPException(status_code=401, detail="Invalid or expired code")
 
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

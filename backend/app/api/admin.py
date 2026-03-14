@@ -120,7 +120,9 @@ async def list_users(
     current_user: User = Depends(require_role(ROLE_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User))
+    result = await db.execute(
+        select(User).where(User.deleted_at.is_(None), User.is_active == True)
+    )
     return [UserOut.model_validate(u) for u in result.scalars().all()]
 
 
@@ -134,6 +136,8 @@ async def search_users(
     pattern = f"%{q}%"
     result = await db.execute(
         select(User).where(
+            User.deleted_at.is_(None),
+            User.is_active == True,
             or_(User.name.ilike(pattern), User.email.ilike(pattern))
         ).limit(8)
     )
@@ -160,7 +164,13 @@ async def invite_to_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    user_result = await db.execute(select(User).where(User.email == payload.email))
+    user_result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = user_result.scalar_one_or_none()
 
     if user:
@@ -204,7 +214,13 @@ async def add_user_role(
     current_user: User = Depends(require_role(ROLE_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -221,7 +237,13 @@ async def remove_user_role(
     current_user: User = Depends(require_role(ROLE_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

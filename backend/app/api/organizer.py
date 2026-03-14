@@ -75,6 +75,8 @@ async def search_users(
     pattern = f"%{q}%"
     result = await db.execute(
         select(User).where(
+            User.deleted_at.is_(None),
+            User.is_active == True,
             or_(User.name.ilike(pattern), User.email.ilike(pattern))
         ).limit(8)
     )
@@ -88,7 +90,13 @@ async def get_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single user by ID"""
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -114,7 +122,9 @@ async def eligible_players(
 ):
     event = await _get_event_for_organizer(event_id, current_user, db)
 
-    result = await db.execute(select(User))
+    result = await db.execute(
+        select(User).where(User.deleted_at.is_(None), User.is_active == True)
+    )
     users = result.scalars().all()
 
     if not event.allowed_domains:
@@ -410,7 +420,13 @@ async def invite_auctioneer(
     if event.status != AuctionStatus.draft:
         raise HTTPException(status_code=400, detail="Cannot change auctioneer after event is published")
 
-    user_result = await db.execute(select(User).where(User.email == payload.email))
+    user_result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     ae_user = user_result.scalar_one_or_none()
 
     if ae_user:
@@ -637,7 +653,13 @@ async def invite_player(
                 detail=f"Email domain '{email_domain}' is not allowed. Allowed: {', '.join(allowed)}",
             )
 
-    user_result = await db.execute(select(User).where(User.email == payload.email))
+    user_result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
+    )
     user = user_result.scalar_one_or_none()
 
     if user:

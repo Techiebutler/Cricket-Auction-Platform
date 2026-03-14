@@ -18,7 +18,11 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     result = await db.execute(
-        select(User).where(User.id == int(user_id), User.deleted_at.is_(None))
+        select(User).where(
+            User.id == int(user_id),
+            User.deleted_at.is_(None),
+            User.is_active == True
+        )
     )
     user = result.scalar_one_or_none()
     if not user:
