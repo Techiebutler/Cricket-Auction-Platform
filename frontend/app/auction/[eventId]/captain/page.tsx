@@ -68,6 +68,7 @@ export default function CaptainPage() {
   const [bidAmount, setBidAmount] = useState("");
   const [bidError, setBidError] = useState("");
   const [bidding, setBidding] = useState(false);
+  const [lastBidTime, setLastBidTime] = useState(0);
   const [eventMeta, setEventMeta] = useState<EventMeta | null>(null);
   const [completedSummary, setCompletedSummary] = useState<CompletedSummary | null>(null);
   const [teamRosters, setTeamRosters] = useState<Record<number, { player_id: number; sold_price: number }[]>>({});
@@ -272,8 +273,18 @@ export default function CaptainPage() {
     return [...starred, ...rest];
   })();
 
+  const BID_DEBOUNCE_MS = 500;
+
   const placeBid = async () => {
     if (!bidAmount) return;
+    
+    // Debounce: prevent rapid bids within 500ms
+    const now = Date.now();
+    if (now - lastBidTime < BID_DEBOUNCE_MS) {
+      return;
+    }
+    setLastBidTime(now);
+    
     const numericAmount = parseInt(bidAmount, 10);
     const validationError = getBidValidationError(numericAmount);
     if (validationError) {

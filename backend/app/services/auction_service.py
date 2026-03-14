@@ -26,6 +26,15 @@ TIMER_SECONDS = 180
 
 # Track running timer tasks per event
 _timer_tasks: dict[int, asyncio.Task] = {}
+# Locks per event to prevent race conditions when starting/stopping timers
+_timer_locks: dict[int, asyncio.Lock] = {}
+
+
+def _get_timer_lock(event_id: int) -> asyncio.Lock:
+    """Get or create a lock for the given event."""
+    if event_id not in _timer_locks:
+        _timer_locks[event_id] = asyncio.Lock()
+    return _timer_locks[event_id]
 
 
 def _timer_key(event_id: int) -> str:
@@ -373,10 +382,16 @@ async def set_next_player(
     player_id: Optional[int],
     db: AsyncSession,
 ) -> AuctionPlayer:
-    # Cancel any existing timer
-    task = _timer_tasks.pop(event_id, None)
-    if task:
-        task.cancel()
+    # Cancel any existing timer with lock to prevent race conditions
+    lock = _get_timer_lock(event_id)
+    async with lock:
+        task = _timer_tasks.pop(event_id, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
 
     # Defensive normalization: if any stale rows are still marked active
     # (e.g. from old runs/crashes), mark them unsold before moving next.
@@ -426,10 +441,15 @@ async def set_next_player(
     await db.commit()
     await db.refresh(ap)
 
-    # Store active player in Redis and start timer
+    # Store active player in Redis and start timer with lock
     redis = await get_redis()
     await redis.set(_active_key(event_id), ap.id)
-    await redis.set(_timer_key(event_id), TIMER_SECONDS)
+    
+    async with lock:
+        await redis.set(_timer_key(event_id), TIMER_SECONDS)
+        # Start countdown in background
+        task = asyncio.create_task(_run_timer(event_id, ap.id))
+        _timer_tasks[event_id] = task
 
     await manager.broadcast(
         event_id,
@@ -442,10 +462,6 @@ async def set_next_player(
             "current_bid": ap.current_bid,
         },
     )
-
-    # Start countdown in background
-    task = asyncio.create_task(_run_timer(event_id, ap.id))
-    _timer_tasks[event_id] = task
 
     return ap
 
@@ -561,16 +577,23 @@ async def place_bid(
     await db.refresh(ap)
 
     # Reset timer to full duration on every valid bid.
-    # We restart the timer task so countdown truly resets to 60.
-    task = _timer_tasks.pop(event_id, None)
-    if task and not task.done():
-        task.cancel()
+    # Use lock to prevent race conditions with simultaneous bids.
+    lock = _get_timer_lock(event_id)
+    async with lock:
+        task = _timer_tasks.pop(event_id, None)
+        if task and not task.done():
+            task.cancel()
+            # Wait for the task to actually be cancelled
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
 
-    redis = await get_redis()
-    await redis.set(_timer_key(event_id), TIMER_SECONDS)
+        redis = await get_redis()
+        await redis.set(_timer_key(event_id), TIMER_SECONDS)
 
-    task = asyncio.create_task(_run_timer(event_id, auction_player_id))
-    _timer_tasks[event_id] = task
+        task = asyncio.create_task(_run_timer(event_id, auction_player_id))
+        _timer_tasks[event_id] = task
 
     await manager.broadcast(
         event_id,
@@ -598,12 +621,18 @@ async def hammer_player(event_id: int, auction_player_id: int, db: AsyncSession)
     await redis.delete(_timer_key(event_id))
     await redis.delete(_active_key(event_id))
 
-    # Cancel timer task if manually hammered
-    task = _timer_tasks.pop(event_id, None)
-    current = asyncio.current_task()
-    # Don't cancel the currently-running timer task itself during auto-hammer.
-    if task and not task.done() and task is not current:
-        task.cancel()
+    # Cancel timer task if manually hammered, with lock to prevent race conditions
+    lock = _get_timer_lock(event_id)
+    async with lock:
+        task = _timer_tasks.pop(event_id, None)
+        current = asyncio.current_task()
+        # Don't cancel the currently-running timer task itself during auto-hammer.
+        if task and not task.done() and task is not current:
+            task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
 
     if ap.current_bidder_id:
         ap.status = PlayerAuctionStatus.sold
