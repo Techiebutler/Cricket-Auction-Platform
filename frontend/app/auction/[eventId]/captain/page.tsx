@@ -273,12 +273,12 @@ export default function CaptainPage() {
     return [...starred, ...rest];
   })();
 
-  const BID_DEBOUNCE_MS = 500;
+  const BID_DEBOUNCE_MS = 2000;
 
   const placeBid = async () => {
     if (!bidAmount) return;
     
-    // Debounce: prevent rapid bids within 500ms
+    // Debounce: prevent rapid bids within 2 seconds
     const now = Date.now();
     if (now - lastBidTime < BID_DEBOUNCE_MS) {
       return;
@@ -305,7 +305,11 @@ export default function CaptainPage() {
 
   const isMyBid = activeAP?.current_bidder_id === user?.id;
   const effectiveBid = activeAP ? (activeAP.current_bid || activeAP.base_price) : 0;
-  const maxAllowedBid = effectiveBid + Math.floor(effectiveBid / 2);
+  // Max increment is min(50% of current bid, 5% of total budget)
+  const fiftyPercentIncrement = Math.floor(effectiveBid / 2);
+  const fivePercentOfBudget = myTeam ? Math.floor(myTeam.budget * 0.05) : fiftyPercentIncrement;
+  const maxIncrement = Math.min(fiftyPercentIncrement, fivePercentOfBudget);
+  const maxAllowedBid = effectiveBid + maxIncrement;
   const minBidStep = getMinBidStep(effectiveBid);
   const isResultState = activeAP?.status === "sold" || activeAP?.status === "unsold";
   const iWonPlayer = !!activeAP && activeAP.status === "sold" && activeAP.current_bidder_id === user?.id;
@@ -328,7 +332,9 @@ export default function CaptainPage() {
     if (increment < minBidStep) return `Minimum increment for current bid is ${minBidStep}`;
     if (increment % minBidStep !== 0) return `Bid increment must be in multiples of ${minBidStep}`;
     if (amount > maxAllowedBid) {
-      return `Bid cannot exceed 50% of current bid. Max allowed: ${maxAllowedBid}`;
+      const isCappedByBudget = fivePercentOfBudget < fiftyPercentIncrement;
+      const reason = isCappedByBudget ? "5% of budget" : "50% of current bid";
+      return `Max increment is ${reason}. Max allowed: ${maxAllowedBid.toLocaleString()}`;
     }
     return "";
   };

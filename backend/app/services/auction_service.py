@@ -569,21 +569,26 @@ async def place_bid(
             f"Bid increment must be in multiples of {min_step}"
         )
 
-    # Guard against unrealistic jump bids:
-    # next bid cannot exceed 50% above current bid.
-    max_allowed_bid = ap.current_bid + (ap.current_bid // 2)
-    if amount > max_allowed_bid:
-        raise ValueError(
-            f"Bid cannot exceed 50% of current bid. Max allowed: {max_allowed_bid}"
-        )
-
-    # Check captain's team budget
+    # Check captain's team budget first (needed for max bid calculation)
     team_result = await db.execute(
         select(Team).where(Team.event_id == event_id, Team.captain_id == captain_id)
     )
     team = team_result.scalar_one_or_none()
     if not team:
         raise ValueError("Captain has no team in this event")
+
+    # Guard against unrealistic jump bids:
+    # Max increment is min(50% of current bid, 5% of total budget)
+    fifty_percent_increment = ap.current_bid // 2
+    five_percent_of_budget = team.budget // 20  # 5% of budget
+    max_increment = min(fifty_percent_increment, five_percent_of_budget)
+    max_allowed_bid = ap.current_bid + max_increment
+    
+    if amount > max_allowed_bid:
+        if five_percent_of_budget < fifty_percent_increment:
+            raise ValueError(f"Max increment is 5% of budget. Max allowed: {max_allowed_bid}")
+        else:
+            raise ValueError(f"Max increment is 50% of current bid. Max allowed: {max_allowed_bid}")
 
     remaining_budget = team.budget - team.spent
     if amount > remaining_budget:
