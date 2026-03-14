@@ -230,8 +230,9 @@ class ConnectionManager:
                 for key in keys:
                     # Extract event_id from key
                     try:
-                        event_id = int(key.decode().split(":")[1])
-                    except (ValueError, IndexError):
+                        key_str = key.decode() if isinstance(key, bytes) else key
+                        event_id = int(key_str.split(":")[1])
+                    except (ValueError, IndexError, AttributeError):
                         continue
                     
                     # Skip events with active connections on this worker
