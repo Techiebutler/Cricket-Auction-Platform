@@ -24,17 +24,19 @@ TIMER_KEY = "auction:{event_id}:timer"
 ACTIVE_PLAYER_KEY = "auction:{event_id}:active_player"
 TIMER_SECONDS = 180
 
-# Track running timer tasks per event
+# Track running timer tasks per event (local to this worker)
 _timer_tasks: dict[int, asyncio.Task] = {}
-# Locks per event to prevent race conditions when starting/stopping timers
-_timer_locks: dict[int, asyncio.Lock] = {}
 
 
-def _get_timer_lock(event_id: int) -> asyncio.Lock:
-    """Get or create a lock for the given event."""
-    if event_id not in _timer_locks:
-        _timer_locks[event_id] = asyncio.Lock()
-    return _timer_locks[event_id]
+def _timer_owner_key(event_id: int) -> str:
+    """Redis key to track which worker owns the timer."""
+    return f"auction:{event_id}:timer_owner"
+
+
+def _get_worker_id() -> str:
+    """Get unique identifier for this worker process."""
+    import os
+    return f"{os.getpid()}"
 
 
 def _timer_key(event_id: int) -> str:
@@ -289,13 +291,15 @@ async def pause_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     if not event or event.status != AuctionStatus.active:
         raise ValueError("Auction not active")
 
-    # Stop timer
-    task = _timer_tasks.pop(event_id, None)
-    if task:
-        task.cancel()
-
+    # Stop timer - clear ownership to signal all workers to stop
     redis = await get_redis()
+    await redis.delete(_timer_owner_key(event_id))
     await redis.delete(_timer_key(event_id))
+    
+    # Cancel local timer task if we have one
+    task = _timer_tasks.pop(event_id, None)
+    if task and not task.done():
+        task.cancel()
 
     event.status = AuctionStatus.paused
     await db.commit()
@@ -311,14 +315,16 @@ async def finish_auction(event_id: int, db: AsyncSession) -> AuctionEvent:
     if not event or event.status not in (AuctionStatus.active, AuctionStatus.paused):
         raise ValueError("Auction must be active or paused to finish")
 
-    # Stop timer if any
-    task = _timer_tasks.pop(event_id, None)
-    if task:
-        task.cancel()
-
+    # Stop timer - clear ownership to signal all workers to stop
     redis = await get_redis()
+    await redis.delete(_timer_owner_key(event_id))
     await redis.delete(_timer_key(event_id))
     await redis.delete(_active_key(event_id))
+    
+    # Cancel local timer task if we have one
+    task = _timer_tasks.pop(event_id, None)
+    if task and not task.done():
+        task.cancel()
 
     # Mark active players as unsold
     active_players_res = await db.execute(
@@ -382,16 +388,22 @@ async def set_next_player(
     player_id: Optional[int],
     db: AsyncSession,
 ) -> AuctionPlayer:
-    # Cancel any existing timer with lock to prevent race conditions
-    lock = _get_timer_lock(event_id)
-    async with lock:
-        task = _timer_tasks.pop(event_id, None)
-        if task and not task.done():
-            task.cancel()
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+    # Take over timer ownership via Redis to stop any running timers on other workers
+    redis = await get_redis()
+    worker_id = _get_worker_id()
+    owner_key = _timer_owner_key(event_id)
+    
+    # Take ownership - this signals other workers to stop their timers
+    await redis.set(owner_key, worker_id)
+    
+    # Cancel local timer task if we have one
+    task = _timer_tasks.pop(event_id, None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
 
     # Defensive normalization: if any stale rows are still marked active
     # (e.g. from old runs/crashes), mark them unsold before moving next.
@@ -441,15 +453,14 @@ async def set_next_player(
     await db.commit()
     await db.refresh(ap)
 
-    # Store active player in Redis and start timer with lock
-    redis = await get_redis()
+    # Store active player in Redis and start timer
+    # redis already fetched at start of function
     await redis.set(_active_key(event_id), ap.id)
+    await redis.set(_timer_key(event_id), TIMER_SECONDS)
     
-    async with lock:
-        await redis.set(_timer_key(event_id), TIMER_SECONDS)
-        # Start countdown in background
-        task = asyncio.create_task(_run_timer(event_id, ap.id))
-        _timer_tasks[event_id] = task
+    # Start countdown in background on this worker
+    task = asyncio.create_task(_run_timer(event_id, ap.id))
+    _timer_tasks[event_id] = task
 
     await manager.broadcast(
         event_id,
@@ -467,9 +478,22 @@ async def set_next_player(
 
 
 async def _run_timer(event_id: int, auction_player_id: int):
+    """
+    Run the countdown timer. Uses Redis to coordinate across workers.
+    Only the worker that owns the timer will run the countdown.
+    """
     redis = await get_redis()
+    worker_id = _get_worker_id()
+    owner_key = _timer_owner_key(event_id)
+    
     try:
         for remaining in range(TIMER_SECONDS, -1, -1):
+            # Check if we still own the timer (another worker may have taken over)
+            current_owner = await redis.get(owner_key)
+            if current_owner != worker_id:
+                # Another worker has taken over, stop this timer
+                return
+            
             await redis.set(_timer_key(event_id), remaining)
             await manager.broadcast(
                 event_id,
@@ -479,10 +503,16 @@ async def _run_timer(event_id: int, auction_player_id: int):
                 break
             await asyncio.sleep(1)
 
-        # Auto-hammer when timer reaches 0
-        from app.core.database import AsyncSessionLocal
-        async with AsyncSessionLocal() as db:
-            await hammer_player(event_id, auction_player_id, db)
+        # Auto-hammer when timer reaches 0 - but only if we still own it
+        # Use atomic check-and-delete to prevent race conditions
+        current_owner = await redis.get(owner_key)
+        if current_owner == worker_id:
+            # Delete ownership BEFORE hammering to prevent other workers from
+            # thinking we still own it during the hammer operation
+            await redis.delete(owner_key)
+            from app.core.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await hammer_player(event_id, auction_player_id, db)
     except asyncio.CancelledError:
         pass
 
@@ -577,23 +607,27 @@ async def place_bid(
     await db.refresh(ap)
 
     # Reset timer to full duration on every valid bid.
-    # Use lock to prevent race conditions with simultaneous bids.
-    lock = _get_timer_lock(event_id)
-    async with lock:
-        task = _timer_tasks.pop(event_id, None)
-        if task and not task.done():
-            task.cancel()
-            # Wait for the task to actually be cancelled
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+    # Take over timer ownership via Redis to coordinate across workers.
+    redis = await get_redis()
+    worker_id = _get_worker_id()
+    owner_key = _timer_owner_key(event_id)
+    
+    # Take ownership - this signals other workers to stop their timers
+    await redis.set(owner_key, worker_id)
+    await redis.set(_timer_key(event_id), TIMER_SECONDS)
+    
+    # Cancel local timer task if we have one
+    task = _timer_tasks.pop(event_id, None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
 
-        redis = await get_redis()
-        await redis.set(_timer_key(event_id), TIMER_SECONDS)
-
-        task = asyncio.create_task(_run_timer(event_id, auction_player_id))
-        _timer_tasks[event_id] = task
+    # Start new timer on this worker
+    task = asyncio.create_task(_run_timer(event_id, auction_player_id))
+    _timer_tasks[event_id] = task
 
     await manager.broadcast(
         event_id,
@@ -617,22 +651,21 @@ async def hammer_player(event_id: int, auction_player_id: int, db: AsyncSession)
     if not ap or ap.status != PlayerAuctionStatus.active:
         return
 
+    # Clear timer ownership and keys - signals all workers to stop their timers
     redis = await get_redis()
+    await redis.delete(_timer_owner_key(event_id))
     await redis.delete(_timer_key(event_id))
     await redis.delete(_active_key(event_id))
 
-    # Cancel timer task if manually hammered, with lock to prevent race conditions
-    lock = _get_timer_lock(event_id)
-    async with lock:
-        task = _timer_tasks.pop(event_id, None)
-        current = asyncio.current_task()
-        # Don't cancel the currently-running timer task itself during auto-hammer.
-        if task and not task.done() and task is not current:
-            task.cancel()
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+    # Cancel local timer task if we have one (and it's not the current task doing auto-hammer)
+    task = _timer_tasks.pop(event_id, None)
+    current = asyncio.current_task()
+    if task and not task.done() and task is not current:
+        task.cancel()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
 
     if ap.current_bidder_id:
         ap.status = PlayerAuctionStatus.sold
