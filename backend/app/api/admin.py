@@ -14,7 +14,7 @@ from app.schemas.auction import AuctionEventCreate, AuctionEventUpdate, AuctionE
 from app.schemas.user import UserOut, AssignRolePayload
 from app.services import email_service
 from app.core.queue import enqueue
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 INVITE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
@@ -22,6 +22,11 @@ INVITE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
 class InvitePayload(BaseModel):
     email: EmailStr
     role: str  # "organizer" | "auctioneer"
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

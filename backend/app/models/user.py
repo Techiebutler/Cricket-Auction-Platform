@@ -39,6 +39,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     def has_role(self, role: str) -> bool:
         return role in (self.roles or [ROLE_PLAYER])
@@ -52,3 +55,12 @@ class User(Base):
     def remove_role(self, role: str):
         current = list(self.roles or [ROLE_PLAYER])
         self.roles = [r for r in current if r != role]
+
+    def soft_delete(self):
+        """Mark user as deleted without removing from database."""
+        self.deleted_at = datetime.now(timezone.utc)
+        self.is_active = False
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None

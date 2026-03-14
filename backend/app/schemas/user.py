@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 from app.models.user import ALL_ROLES
 
@@ -11,6 +11,11 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
+
 
 class GodmodeRegister(BaseModel):
     name: str
@@ -18,10 +23,20 @@ class GodmodeRegister(BaseModel):
     password: str
     secret: str  # must match GODMODE_SECRET
 
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
 
 
 class UserOnboard(BaseModel):

@@ -26,7 +26,7 @@ def _generate_code(length: int = 6) -> str:
 from app.schemas.user import UserRegister, GodmodeRegister, UserLogin, UserOnboard, UserOut, TokenOut
 from app.services import email_service
 from app.core.queue import enqueue
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 
 
@@ -40,10 +40,20 @@ class InviteRegister(BaseModel):
 class MagicCodeRequest(BaseModel):
     email: EmailStr
 
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
+
 
 class MagicCodeVerify(BaseModel):
     email: EmailStr
     code: str
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -106,7 +116,9 @@ async def godmode_register(payload: GodmodeRegister, db: AsyncSession = Depends(
 
 @router.post("/login", response_model=TokenOut)
 async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(
+        select(User).where(User.email == payload.email, User.deleted_at.is_(None))
+    )
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")

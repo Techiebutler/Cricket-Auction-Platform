@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 
@@ -31,9 +31,19 @@ INVITE_TTL_SECONDS = 60 * 60 * 24 * 7
 class AuctioneerInvitePayload(BaseModel):
     email: EmailStr
 
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
+
 
 class PlayerInvitePayload(BaseModel):
     email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v: str) -> str:
+        return v.lower()
 
 
 class EventSettingsUpdatePayload(BaseModel):
