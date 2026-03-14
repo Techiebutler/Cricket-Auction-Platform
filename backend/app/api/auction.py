@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, WebSocketException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from app.core.database import AsyncSessionLocal
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.core.redis import get_redis
@@ -250,13 +251,39 @@ async def hammer(
 # WebSocket endpoint
 @router.websocket("/ws/{event_id}")
 async def websocket_endpoint(event_id: int, websocket: WebSocket, token: str = ""):
+    # Validate event exists before accepting connection
+
+    async with AsyncSessionLocal() as db:
+        event_result = await db.execute(
+            select(AuctionEvent).where(AuctionEvent.id == event_id)
+        )
+        event = event_result.scalar_one_or_none()
+        if not event:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
     # Validate token for WS connections
     user_id = decode_token(token) if token else None
 
     await manager.connect(event_id, websocket, user_id)
+    
+    # Heartbeat task to detect dead connections
+    heartbeat_task = None
+    
+    async def send_heartbeat():
+        """Send ping every 30 seconds to keep connection alive and detect dead clients."""
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await websocket.send_json({"type": "ping"})
+        except Exception:
+            pass
+    
     try:
+        # Start heartbeat task
+        heartbeat_task = asyncio.create_task(send_heartbeat())
+        
         # Send current state on connect
-        from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             state = await auction_service.get_auction_state(event_id, db)
         await manager.send_personal(websocket, state)
@@ -264,8 +291,20 @@ async def websocket_endpoint(event_id: int, websocket: WebSocket, token: str = "
         # Keep connection alive and handle incoming messages
         while True:
             data = await websocket.receive_text()
-            # Clients can send ping to keep alive
+            # Clients can send ping/pong to keep alive
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        # Log unexpected errors but don't crash
+        print(f"WebSocket error for event {event_id}: {e}")
+    finally:
+        # Always clean up - cancel heartbeat and disconnect
+        if heartbeat_task:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
         await manager.disconnect(event_id, websocket)
 
 
