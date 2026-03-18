@@ -328,9 +328,15 @@ export default function CaptainPage() {
 
   const getBidValidationError = (amount: number) => {
     if (Number.isNaN(amount)) return "Enter a valid bid amount";
+    const isFirstBid = !activeAP?.current_bidder_id;
     const increment = amount - effectiveBid;
-    if (increment < minBidStep) return `Minimum increment for current bid is ${minBidStep}`;
-    if (increment % minBidStep !== 0) return `Bid increment must be in multiples of ${minBidStep}`;
+    // First bid can be at base price (increment = 0), subsequent bids need minimum increment
+    if (isFirstBid) {
+      if (amount < effectiveBid) return `Bid must be at least base price: ${effectiveBid}`;
+    } else {
+      if (increment < minBidStep) return `Minimum increment for current bid is ${minBidStep}`;
+    }
+    if (increment > 0 && increment % minBidStep !== 0) return `Bid increment must be in multiples of ${minBidStep}`;
     if (amount > maxAllowedBid) {
       const isCappedByBudget = fivePercentOfBudget < fiftyPercentIncrement;
       const reason = isCappedByBudget ? "5% of budget" : "50% of current bid";

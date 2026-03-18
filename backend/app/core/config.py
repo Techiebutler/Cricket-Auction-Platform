@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     AWS_MAIL_ACCESS_KEY_ID: Optional[str] = None
     AWS_MAIL_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION: str = "ap-south-1"
-    EMAIL_FROM: str = "auction@techiebutlermail.com"
+    EMAIL_FROM: str = "auction@yourdomain.com"
 
     # AWS S3 (reuse AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY if set, else fall back to SES creds)
     AWS_ACCESS_KEY_ID: Optional[str] = None

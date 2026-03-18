@@ -81,7 +81,7 @@ services:
         condition: service_started
     labels:
       - traefik.enable=true
-      - traefik.http.routers.backend.rule=Host(`auction.techiebutler.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/api`)
       - traefik.http.routers.backend.entrypoints=websecure
       - traefik.http.routers.backend.tls.certresolver=letsencrypt
       - traefik.http.services.backend.loadbalancer.server.port=8000
@@ -112,7 +112,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NEXT_PUBLIC_API_URL: /api
-        NEXT_PUBLIC_WS_URL: wss://auction.techiebutler.com/api/auction/ws
+        NEXT_PUBLIC_WS_URL: wss://${PUBLIC_DOMAIN}/api/auction/ws
     env_file:
       - .env.prod
     depends_on:
@@ -120,7 +120,7 @@ services:
       - traefik
     labels:
       - traefik.enable=true
-      - traefik.http.routers.frontend.rule=Host(`auction.techiebutler.com`)
+      - traefik.http.routers.frontend.rule=Host(`${PUBLIC_DOMAIN}`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
       - traefik.http.services.frontend.loadbalancer.server.port=3000

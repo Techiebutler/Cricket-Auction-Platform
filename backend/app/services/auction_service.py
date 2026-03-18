@@ -560,14 +560,18 @@ async def place_bid(
         min_step = 50
 
     increment = amount - ap.current_bid
-    if increment < min_step:
-        raise ValueError(
-            f"Minimum increment is {min_step}"
-        )
-    if increment % min_step != 0:
-        raise ValueError(
-            f"Bid increment must be in multiples of {min_step}"
-        )
+    is_first_bid = ap.current_bidder_id is None
+    
+    # First bid can be at base price (increment = 0), subsequent bids need minimum increment
+    if is_first_bid:
+        if amount < ap.current_bid:
+            raise ValueError(f"Bid must be at least base price: {ap.current_bid}")
+    else:
+        if increment < min_step:
+            raise ValueError(f"Minimum increment is {min_step}")
+    
+    if increment > 0 and increment % min_step != 0:
+        raise ValueError(f"Bid increment must be in multiples of {min_step}")
 
     # Check captain's team budget first (needed for max bid calculation)
     team_result = await db.execute(
