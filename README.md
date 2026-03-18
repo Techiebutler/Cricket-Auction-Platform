@@ -16,22 +16,22 @@ Experience the thrill of live player auctions — perfect for office cricket lea
 
 ---
 
-## ✨ Features
+## Features
 
-- 🎯 **Real-time Bidding** — WebSocket-powered live auctions with instant updates
-- 👥 **Multi-Role System** — Admin, Organizer, Auctioneer, Captain, Player, Spectator
-- ⏱️ **Smart Timer** — Auto-resets on bids, configurable duration
-- 📊 **Live Dashboard** — Track budgets, rosters, and bid history in real-time
-- 📺 **Spectator Mode** — Projector-ready full-screen view for audiences
-- 📧 **Email Invitations** — Automated invites via AWS SES (or configure your own SMTP)
-- 🖼️ **Player Profiles** — Photo uploads with skill ratings
-- 🔒 **Secure Auth** — JWT-based authentication with magic link support
-- 🐳 **Docker Ready** — One-command deployment with Docker Compose
-- 🔄 **Scalable** — Redis-based coordination supports multiple workers/pods
+- **Real-time Bidding** — WebSocket-powered live auctions with instant updates
+- **Multi-Role System** — Admin, Organizer, Auctioneer, Captain, Player, Spectator
+- **Smart Timer** — Auto-resets on bids, configurable duration
+- **Live Dashboard** — Track budgets, rosters, and bid history in real-time
+- **Spectator Mode** — Projector-ready full-screen view for audiences
+- **Email Invitations** — Automated invites via AWS SES (or configure your own SMTP)
+- **Player Profiles** — Photo uploads with skill ratings
+- **Secure Auth** — JWT-based authentication with magic link support
+- **Docker Ready** — One-command deployment with Docker Compose
+- **Scalable** — Redis-based coordination supports multiple workers/pods
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 <details>
 <summary><b>Click to view screenshots</b></summary>
@@ -52,7 +52,7 @@ Experience the thrill of live player auctions — perfect for office cricket lea
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
@@ -64,7 +64,7 @@ Experience the thrill of live player auctions — perfect for office cricket lea
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option 1: Full Docker Setup (Recommended)
 
@@ -119,7 +119,7 @@ npm run dev
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -179,7 +179,7 @@ docker compose exec backend python seed_players.py
 
 ---
 
-## 🏗️ Production Deployment
+## Production Deployment
 
 ### Using Docker Compose + Traefik (Recommended)
 
@@ -225,7 +225,7 @@ To use an external PostgreSQL (e.g., AWS RDS, Supabase, Neon):
 
 ---
 
-## 👥 User Roles
+## User Roles
 
 | Role | Capabilities |
 |------|--------------|
@@ -238,7 +238,7 @@ To use an external PostgreSQL (e.g., AWS RDS, Supabase, Neon):
 
 ---
 
-## 🎮 Auction Flow
+## Auction Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -269,7 +269,7 @@ To use an external PostgreSQL (e.g., AWS RDS, Supabase, Neon):
 
 ---
 
-## 🔌 WebSocket Events
+## WebSocket Events
 
 Connect to: `ws://your-domain/api/auction/ws/{eventId}?token=<jwt>`
 
@@ -287,7 +287,7 @@ Connect to: `ws://your-domain/api/auction/ws/{eventId}?token=<jwt>`
 
 ---
 
-## 🧪 Testing & Development
+## Testing & Development
 
 ### God Mode (Dev Only)
 
@@ -316,7 +316,7 @@ npm test
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -328,20 +328,20 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by IPL player auctions
-- Built with ❤️ for cricket lovers everywhere
+- Built with ❤️ for cricket lovers
 
 ---
 
-## 📬 Contact & Support
+## Contact & Support
 
 <div align="center">
 
@@ -349,7 +349,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Have questions? Need help?
 
-📧 **Email:** [support@techiebutler.com](mailto:support@techiebutler.com)
+**Email:** [support@techiebutler.com](mailto:support@techiebutler.com)
 
 [![Instagram](https://img.shields.io/badge/Instagram-%23E4405F.svg?style=for-the-badge&logo=Instagram&logoColor=white)](https://www.instagram.com/techie_butler/)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/techiebutler/)
